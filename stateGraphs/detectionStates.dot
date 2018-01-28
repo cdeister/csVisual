@@ -1,0 +1,26 @@
+digraph {
+    subgraph cluster_0 {
+        init-> wait;
+    }
+
+    subgraph cluster_1 {
+        wait -> "stim";
+    }
+
+    subgraph cluster_2 {
+        wait -> "no stim";
+    }
+
+    subgraph cluster_3{
+        "stim" -> reward[label=" licked"]
+        "stim" -> "time out"[label=" no lick"]
+        "no stim" -> "time out"[label=" licked"]
+        "no stim" -> init[label=" no lick"]
+    }
+
+    subgraph cluster_4{
+        reward->save
+        "time out"->save
+        save->wait
+    }
+}
