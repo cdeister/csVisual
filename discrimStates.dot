@@ -1,0 +1,50 @@
+digraph graphname { 
+    sysStart -> init;
+    
+    init -> visMap;
+    init -> visBehavior;
+    init -> somatoMap;
+    init -> somatoBheavior;
+    init -> modalMap;
+    init -> modalBehavior;
+    init -> stimExp;
+
+    visMap -> vm_choseStim;
+    visMap -> retinotopy;
+    retinotopy -> vStim_changeCenter;
+    vStim_changeCenter -> vm_choseStim;
+    
+    vm_choseStim -> vStim_pulseOrient;
+    vm_choseStim -> vStim_pulseContrast;
+    vm_choseStim -> vStim_pulseSpatial_F;
+    vm_choseStim -> vStim_pulseTemporal_F;
+
+
+    visBehavior -> vb_wait;
+    vb_wait -> vb_init;
+    vb_init -> cue_shape_contrastDetect;
+    vb_init -> cue_contrastDetect;
+    vb_init -> cue_shape_changeDetect;
+    vb_init -> cue_changeDetect;
+    vb_init -> cue_shape_vbDiscrim;
+    vb_init -> cue_vbDiscrim;
+
+    cue_shape_contrastDetect -> vStim_pulseContrast_shape;
+    cue_contrastDetect -> vStim_pulseContrast_reward;
+    vStim_pulseContrast_shape -> rwd_water
+    vStim_pulseContrast_reward -> vb_choiceCheck;
+    vb_choiceCheck -> rwd_water;
+    vb_choiceCheck -> pun_timeout;
+    vb_choiceCheck -> pun_ledFlash;
+
+
+    rwd_water -> vb_wait;
+    pun_timeout -> timeout;
+    pun_ledFlash -> timeout;
+    pun_ledFlash -> vb_wait;
+    timeout -> vb_wait;
+
+
+}
+
+

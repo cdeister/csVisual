@@ -1,26 +1,25 @@
 digraph {
     subgraph cluster_0 {
-        init-> wait;
+        "S0: Init"-> "S1: Wait"[label=" get vars"];
     }
 
     subgraph cluster_1 {
-        wait -> "stim";
+        "S1: Wait" -> "S2: Stim"[label=" still"];
     }
 
     subgraph cluster_2 {
-        wait -> "no stim";
+        "S1: Wait" -> "S3: No Stim"[label=" still"];
     }
 
     subgraph cluster_3{
-        "stim" -> reward[label=" licked"]
-        "stim" -> "time out"[label=" no lick"]
-        "no stim" -> "time out"[label=" licked"]
-        "no stim" -> init[label=" no lick"]
+        "S2: Stim" -> "S4: Reward"[label=" if lick"]
+        "S2: Stim" -> "S5: Time Out"[label=" if no lick"]
+        "S3: No Stim" -> "S5: Time Out"[label=" if lick"]
+        "S3: No Stim" -> "S0: Init "[label="   if no lick"]
     }
 
     subgraph cluster_4{
-        reward->save
-        "time out"->save
-        save->wait
+        "S4: Reward"->"S0: Init "
+        "S5: Time Out"->"S0: Init "
     }
 }
