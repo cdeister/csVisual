@@ -1,5 +1,5 @@
-% % ptb only, but with trigger out.
-featherPath='COM16';
+% ptb only, but with trigger out.
+featherPath='/dev/cu.usbmodem179';
 featherBaud=9600;
 feather=serial(featherPath,'BaudRate',featherBaud);
 fopen(feather);
@@ -45,7 +45,7 @@ stimLoopCntr=0;
 % visual set up
 
 % Dimension of the region of Gabor in pixels
-gaborDimPix = windowRect(4) / 2;
+gaborDimPix = windowRect(4) / 0.5;
 
 % Sigma of Gaussian
 sigma = gaborDimPix / 7;
@@ -56,7 +56,7 @@ phase = 0;
 backgroundOffset = [0.5 0.5 0.5 0.0];
 disableNorm = 1;          
 preContrastMultiplier = 0.5;
-[gabortex gabRec] = CreateProceduralGabor(window, gaborDimPix, gaborDimPix, [],...
+[gabortex gabRec] = CreateProceduralGabor(window, windowRect(3), windowRect(4), [],...
     backgroundOffset, disableNorm, preContrastMultiplier);
 
 
@@ -157,7 +157,7 @@ while runningTask
     propertiesMat = [phase, freq, sigma, tContrast, aspectRatio, 0, 0, 0];
 
     % Draw the Gabor
-    Screen('DrawTextures', window, gabortex, [], OffsetRect(gabRec,150,200), tOrient, [], [], [], [],...
+    Screen('DrawTextures', window, gabortex, [], [], tOrient, [], [], [], [],...
         kPsychDontDoRotation, propertiesMat');
 
     % Flip to the screen
