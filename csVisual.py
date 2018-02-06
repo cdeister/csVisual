@@ -31,9 +31,9 @@ class csVariables(object):
     
     def __init__(self,sesVarDict={},trialVars={},stimVars={}):
 
-        self.sesVarDict={'comPath_teensy':'/dev/cu.usbmodem2762721','baudRate_teensy':115200,\
-        'subjID':'an1','taskType':'detect','totalTrials':10,'logMQTT':0,'mqttUpDel':0.05,\
-        'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,'waterConsumed':0,'consumpTarg':1.5,'dirPath':'/'}
+        self.sesVarDict={'comPath_teensy':'COM13','baudRate_teensy':115200,\
+        'subjID':'an1','taskType':'detect','totalTrials':10,'logMQTT':1,'mqttUpDel':0.05,\
+        'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,'waterConsumed':0,'consumpTarg':1.5,'dirPath':'/Users/Deister/BData'}
         
         self.trialVars={'rewardFired':0,'rewardDur':50,'trialNum':0,'trialDur':0,\
         'lickLatchA':0,'lickAThr':500,'minNoLickTime':1000}
@@ -279,7 +279,7 @@ def runDetectionTask():
 
     # Update MQTT Feeds
     if sesVars['logMQTT']==1:
-        aioHashPath='/Users/cad/simpHashes/cdIO.txt'
+        aioHashPath='/Users/deister/simpHashes/cdIO.txt'
         # aio is csAIO's mq broker object.
         aio=csAIO.connectBroker(aioHashPath)
 
@@ -339,12 +339,12 @@ def runDetectionTask():
         # Temp Trial Variability
         trialOn=1
         trialVars['rewardFired']=0
-        preTime=np.random.randint(200,2000)
+        preTime=np.random.randint(200,5000)
         trialVars['rewardDur']=333
         randPad=np.random.randint(1000,3000)
 
         trialVars['trialDur']=preTime+trialVars['rewardDur']+randPad
-        print(trialVars['trialDur']/1000)
+  
         trialVars['trialNum']=trialVars['trialNum']+1
         print('start trial #{}'.format(trialVars['trialNum']))
 
@@ -361,6 +361,8 @@ def runDetectionTask():
         teensy.write('a1>'.encode('utf-8'))  
 
         rwdHead=0
+        s1Header=0
+        s2Header=0
         while trialOn:
             try:
                 # 1) Look for data.
@@ -406,13 +408,47 @@ def runDetectionTask():
 
                     # 4) Now look at what state you are in and evaluate accordingly
                     if pyState == 1 and stateSync==1:
-                        if thrLicksA[-1] == 1:
+            
+                        if s1Header==0:
                             lickCounter=0
+                            lastLick=0
+                            s2Header=0
+                            s1Header=1
+                        if thrLicksA[-1] == 1:
+                            lickCounter=lickCounter+1
                             lastLick=tStateTime
                         if (tStateTime-lastLick)>trialVars['minNoLickTime'] and tStateTime>preTime:
                             stateSync=0
-                            pyState=4
-                            teensy.write('a4>'.encode('utf-8'))
+                            pyState=2
+                            teensy.write('a2>'.encode('utf-8'))
+
+                    if pyState == 2 and stateSync==1:
+                        if s2Header==0:
+                           
+                            reported=0
+                            lickCounter=0
+                            lastLick=0
+                            minStimTime=1000
+                            s1Header=0
+                            s2Header=1
+                        
+                        if thrLicksA[-1] == 1:
+                            lickCounter=lickCounter+1
+                            lastLick=tStateTime
+                            if tStateTime>0.005:
+                                reported=1
+                                print("reported")
+
+                        if tStateTime>minStimTime:
+                            if reported==1:
+                                stateSync=0
+                                pyState=4
+                                teensy.write('a4>'.encode('utf-8'))
+                            elif reported==0: #todo: this should go to 0 after some time
+                                stateSync=0
+                                pyState=4
+                                teensy.write('a4>'.encode('utf-8'))
+                
 
                     if pyState == 4 and stateSync==1:
                         if rwdHead==0:
@@ -443,9 +479,11 @@ def runDetectionTask():
         csPlt.updateTrialFig(trialTime,motion)
 
         teensy.write('a0>'.encode('utf-8'))
+        print('last trial took: {} seconds'.format(trialTime[-1]/1000))
         time.sleep(0.005)
 
     print('finished {} detection trials'.format(sesVars['totalTrials']))
+    trialVars['trialNum']=0
 
     # Update MQTT Feeds
     if sesVars['logMQTT']==1:
@@ -464,6 +502,7 @@ def runDetectionTask():
         aio.send('{}_topVol'.format(sesVars['subjID']),topAmount)
         
     teensy.close()
+
 
 def closeup():
     try:

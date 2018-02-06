@@ -113,6 +113,8 @@ void vStates() {
         genericHeader(1);
       }
       genericStateBody();
+      visSerial.println("t1>");
+      visSerial.println("o20>");
     }
 
     // **************************
