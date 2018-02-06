@@ -32,8 +32,8 @@ class csVariables(object):
     def __init__(self,sesVarDict={},trialVars={},stimVars={}):
 
         self.sesVarDict={'comPath_teensy':'/dev/cu.usbmodem2762721','baudRate_teensy':115200,\
-        'subjID':'an1','taskType':'detect','totalTrials':10,'logMQTT':1,'mqttUpDel':0.05,\
-        'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,'waterConsumed':0,'consumpTarg':1.5}
+        'subjID':'an1','taskType':'detect','totalTrials':10,'logMQTT':0,'mqttUpDel':0.05,\
+        'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,'waterConsumed':0,'consumpTarg':1.5,'dirPath':'/'}
         
         self.trialVars={'rewardFired':0,'rewardDur':50,'trialNum':0,'trialDur':0,\
         'lickLatchA':0,'lickAThr':500,'minNoLickTime':1000}
@@ -252,6 +252,20 @@ dStamp=cTime.strftime("%m_%d_%Y")
 curMachine=csVar.getRig()
 sesVars=csVar.sesVarDict
 
+def getPath():
+    try:
+        selectPath = fd.askdirectory(title ="what what?")
+    except:
+        selectPath='/'
+
+    dirPath_TV.set(selectPath)
+    subjID_TV.set(os.path.basename(selectPath))
+    sesVars['dirPath']=selectPath
+    sesVars['subjID']=os.path.basename(selectPath)
+
+
+
+
 def runDetectionTask():
     detectPlotNum=100
     sesVars['totalTrials']=int(totalTrials_TV.get())
@@ -259,7 +273,7 @@ def runDetectionTask():
     
     
     trialVars=csVar.trialVars
-    f=csSesHDF.makeHDF('/Users/cad/',sesVars['subjID'],dStamp)
+    f=csSesHDF.makeHDF(sesVars['dirPath']+'/',sesVars['subjID'],dStamp)
     hdfGrp=csSesHDF.makeSesGroup(f,-1)
 
 
@@ -270,7 +284,11 @@ def runDetectionTask():
         aio=csAIO.connectBroker(aioHashPath)
 
         sesVars['curWeight']=20 # todo: this is temporary
-        csAIO.rigOnLog(aio,sesVars['subjID'],sesVars['curWeight'],curMachine,sesVars['mqttUpDel'])
+        try:
+            csAIO.rigOnLog(aio,sesVars['subjID'],sesVars['curWeight'],curMachine,sesVars['mqttUpDel'])
+        except:
+            print('no mqtt logging')
+            sesVars['logMQTT']=0
         
         [sesVars['waterConsumed'],hrDiff]=csAIO.getDailyConsumption(aio,sesVars['subjID'],sesVars['rigGMTZoneDif'],12)
         print(hrDiff)
@@ -278,6 +296,7 @@ def runDetectionTask():
 
 
     # Make a teensy object by connecting to the main teensy.
+    sesVars['comPath_teensy']=comPath_teensyTV.get()
     teensy=csSer.connectComObj(sesVars['comPath_teensy'],sesVars['baudRate_teensy'])
 
     # Send teensy to state 0 and flush the buffer.
@@ -313,6 +332,7 @@ def runDetectionTask():
         lick1_Data=[]
         pythonState=[]
         thrLicksA=[]
+        motion=[]
 
         # Temp Trial Variability
         trialOn=1
@@ -342,7 +362,7 @@ def runDetectionTask():
         while trialOn:
             try:
                 # 1) Look for data.
-                [tString,dNew]=csSer.readSerialData(teensy,'tData',7)
+                [tString,dNew]=csSer.readSerialData(teensy,'tData',8)
                 if dNew:
                     tInterrupt=int(tString[1])
                     tTrialTime=int(tString[2])
@@ -350,16 +370,18 @@ def runDetectionTask():
                     tTeensyState=int(tString[4])
                     tLick0=int(tString[5])
                     tLick1=int(tString[6])
+                    tMotion=int(tString[7])
 
 
                     interrupt.append(tInterrupt)
                     trialTime.append(tTrialTime)
                     stateTime.append(tStateTime)
                     teensyState.append(tTeensyState)
+                    pythonState.append(pyState)
                     lick0_Data.append(tLick0)
                     lick1_Data.append(tLick1)
-                    pythonState.append(pyState)
                     thrLicksA.append(0)
+                    motionData.append(tMotion)
 
 
                     # look for licks
@@ -403,15 +425,16 @@ def runDetectionTask():
 
 
         tNum=trialVars['trialNum']
-        tNPA=np.zeros([len(interrupt),8])
+        tNPA=np.zeros([len(interrupt),9])
         tNPA[:,0]=interrupt
         tNPA[:,1]=trialTime
         tNPA[:,2]=stateTime
         tNPA[:,3]=teensyState
-        tNPA[:,4]=lick0_Data
-        tNPA[:,5]=lick1_Data
-        tNPA[:,6]=pythonState
+        tNPA[:,4]=pythonState
+        tNPA[:,5]=lick0_Data
+        tNPA[:,6]=lick1_Data
         tNPA[:,7]=thrLicksA
+        tNPA[:,8]=motion
         hdfGrp['t{}'.format(tNum)]=tNPA
         
         
@@ -459,31 +482,53 @@ if makeBar==0:
     # blank.grid(row=0, column=0,padx=0)
 
     cpRw=0
-    comPath_TV=StringVar(taskBar)
-    comPath_TV.set(sesVars['comPath_teensy'])
-    comPath_entry=Entry(taskBar, width=24, textvariable=comPath_TV)
-    comPath_entry.grid(row=cpRw,column=1,padx=0)
-    comPath_label=Label(taskBar, text="com path:", justify=LEFT)
-    comPath_label.grid(row=cpRw,column=0,padx=0,sticky=W)
+    tb = Button(taskBar,text="set path",width=8,command=getPath)
+    tb.grid(row=cpRw,column=1)
+    dirPath_label=Label(taskBar, text="Save Path:", justify=LEFT)
+    dirPath_label.grid(row=cpRw,column=0,padx=0,sticky=W)
+    dirPath_TV=StringVar(taskBar)
+    dirPath_TV.set(sesVars['dirPath'])
+    dirPath_entry=Entry(taskBar, width=24, textvariable=dirPath_TV)
+    dirPath_entry.grid(row=cpRw+1,column=0,padx=0,columnspan=2,sticky=W)
 
-    sbRw=2
+    cpRw=2
+    comPath_teensy_label=Label(taskBar, text="COM (Teensy) path:", justify=LEFT)
+    comPath_teensy_label.grid(row=cpRw,column=0,padx=0,sticky=W)
+    comPath_teensyTV=StringVar(taskBar)
+    comPath_teensyTV.set(sesVars['comPath_teensy'])
+    comPath_teensy_entry=Entry(taskBar, width=24, textvariable=comPath_teensyTV)
+    comPath_teensy_entry.grid(row=cpRw+1,column=0,padx=0,columnspan=2,sticky=W)
+    
+
+    beRW=4
+    baudEntry_label = Label(taskBar,text="BAUD Rate:",justify=LEFT)
+    baudEntry_label.grid(row=beRW, column=0,sticky=W)
+    baudSelected=IntVar(taskBar)
+    baudSelected.set(115200)
+    baudPick = OptionMenu(taskBar,baudSelected,115200,19200,9600)
+    baudPick.grid(row=beRW, column=1,sticky=W)
+    baudPick.config(width=8)
+
+    sbRw=6
+    subjID_label=Label(taskBar, text="subject id:", justify=LEFT)
+    subjID_label.grid(row=sbRw,column=0,padx=0,sticky=W)
     subjID_TV=StringVar(taskBar)
     subjID_TV.set(sesVars['subjID'])
     subjID_entry=Entry(taskBar, width=10, textvariable=subjID_TV)
-    subjID_entry.grid(row=sbRw+1,column=0,padx=0,sticky=W)
-    subjID_label=Label(taskBar, text="subject id:", justify=LEFT)
-    subjID_label.grid(row=sbRw,column=0,padx=0,sticky=W)
+    subjID_entry.grid(row=sbRw,column=1,padx=0,sticky=W)
     
     
-    ttRw=2
+    
+    ttRw=8
+    teL=Label(taskBar, text="total trials:",justify=LEFT)
+    teL.grid(row=ttRw,column=0,padx=0,sticky=W)
     totalTrials_TV=StringVar(taskBar)
     totalTrials_TV.set(sesVars['totalTrials'])
     te = Entry(taskBar, text="quit",width=10,textvariable=totalTrials_TV)
-    te.grid(row=ttRw+1,column=1,padx=0,sticky=W)
-    teL=Label(taskBar, text="total trials:",justify=LEFT)
-    teL.grid(row=ttRw,column=1,padx=0,sticky=W)
+    te.grid(row=ttRw,column=1,padx=0,sticky=W)
+    
 
-    btnRw=4
+    btnRw=10
     tb = Button(taskBar,text="shape: detection",width=c1Wd,command=runDetectionTask)
     tb.grid(row=btnRw,column=0)
     tc = Button(taskBar,text="task: detection",width=c1Wd,command=runDetectionTask)

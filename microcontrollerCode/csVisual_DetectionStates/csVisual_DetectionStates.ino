@@ -1,5 +1,6 @@
 #include <FlexiTimer2.h>
 
+#define visSerial Serial1
 // Interupt Timing Params.
 int sampsPerSecond = 1000;
 float evalEverySample = 1.0; // number of times to poll the vStates funtion
@@ -11,11 +12,15 @@ uint32_t stateTimeOffs;
 uint32_t trialTime;
 uint32_t stateTime;
 
+
 int lickSensorL = 0;
 int lickSensorR = 0;
-const int lickPinL = 23;
-const int lickPinR = 19;
+int motionSensor = 0;
 
+
+const int lickPinL = 25;
+const int lickPinR = 19;
+const int motionPin = 23;
 const int rewardPinA = 13;   // 35 is better, 13 is LED so good for debug.
 
 int rewardDelivTypeA = 0; // 0 is solenoid; 1 is syringe pump
@@ -181,7 +186,9 @@ void dataReport() {
   Serial.print(',');
   Serial.print(lickSensorL);
   Serial.print(',');
-  Serial.println(lickSensorR);
+  Serial.print(lickSensorR);
+  Serial.print(',');
+  Serial.println(motionSensor);
 }
 
 
@@ -266,6 +273,7 @@ void genericHeader(int stateNum) {
 void genericStateBody() {
   stateTime = millis() - stateTimeOffs;
   pollLickSensors();
+  motionSensor=analogRead(motionPin);
 }
 
 
