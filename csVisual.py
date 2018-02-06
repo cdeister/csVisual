@@ -314,9 +314,11 @@ def runDetectionTask():
 
         # Go ahead and check the state:
         tTeensyState=csSer.checkVariable(tTeensyState,teensy,'a',2,0.005)
-
+        fb=0
         while tTeensyState != 0:
-            print("not in 0, will force")
+            if fb==0:
+                print("not in 0, will force")
+                fb=1
             teensy.write('a0>'.encode('utf-8'))
             time.sleep(0.005)
             tTeensyState=csSer.checkVariable(tTeensyState,teensy,'a',2,0.005)
@@ -381,7 +383,7 @@ def runDetectionTask():
                     lick0_Data.append(tLick0)
                     lick1_Data.append(tLick1)
                     thrLicksA.append(0)
-                    motionData.append(tMotion)
+                    motion.append(tMotion)
 
 
                     # look for licks
@@ -438,7 +440,7 @@ def runDetectionTask():
         hdfGrp['t{}'.format(tNum)]=tNPA
         
         
-        csPlt.updateTrialFig(trialTime,lick0_Data)
+        csPlt.updateTrialFig(trialTime,motion)
 
         teensy.write('a0>'.encode('utf-8'))
         time.sleep(0.005)
