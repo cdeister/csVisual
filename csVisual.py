@@ -31,14 +31,16 @@ class csVariables(object):
     
     def __init__(self,sesVarDict={},trialVars={},stimVars={}):
 
-        self.sesVarDict={'comPath_teensy':'COM13','baudRate_teensy':115200,\
+        self.sesVarDict={'comPath_teensy':'/dev/cu.usbmodem3650661','baudRate_teensy':115200,\
         'subjID':'an1','taskType':'detect','totalTrials':10,'logMQTT':1,'mqttUpDel':0.05,\
-        'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,'waterConsumed':0,'consumpTarg':1.5,'dirPath':'/Users/Deister/BData'}
+        'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,'waterConsumed':0,'consumpTarg':1.5,\
+        'dirPath':'/Users/Deister/BData','hashPath':'/Users/cad'}
         
         self.trialVars={'rewardFired':0,'rewardDur':50,'trialNum':0,'trialDur':0,\
         'lickLatchA':0,'lickAThr':500,'minNoLickTime':1000}
 
         self.stimVars={'contrast':1,'sFreq':4,'orientation':0}
+
 
     def getRig(self):
         # returns a string that is the hostname
@@ -264,8 +266,6 @@ def getPath():
     sesVars['subjID']=os.path.basename(selectPath)
 
 
-
-
 def runDetectionTask():
     detectPlotNum=100
     sesVars['totalTrials']=int(totalTrials_TV.get())
@@ -279,10 +279,9 @@ def runDetectionTask():
 
     # Update MQTT Feeds
     if sesVars['logMQTT']==1:
-        aioHashPath='/Users/deister/simpHashes/cdIO.txt'
+        aioHashPath=sesVars['hashPath'] + '/simpHashes/cdIO.txt'
         # aio is csAIO's mq broker object.
         aio=csAIO.connectBroker(aioHashPath)
-
         sesVars['curWeight']=20 # todo: this is temporary
         try:
             csAIO.rigOnLog(aio,sesVars['subjID'],sesVars['curWeight'],curMachine,sesVars['mqttUpDel'])
@@ -301,6 +300,8 @@ def runDetectionTask():
 
     # Send teensy to state 0 and flush the buffer.
     csSer.flushBuffer(teensy)
+    teensy.write('v1>'.encode('utf-8'))
+    time.sleep(0.01)
     teensy.write('a0>'.encode('utf-8'))
     time.sleep(0.01)
 
@@ -309,7 +310,6 @@ def runDetectionTask():
 
     # Initialize some stuff
     tTeensyState=-1
-
     while trialVars['trialNum']<sesVars['totalTrials']:
 
         # Go ahead and check the state:
@@ -342,9 +342,7 @@ def runDetectionTask():
         preTime=np.random.randint(200,5000)
         trialVars['rewardDur']=333
         randPad=np.random.randint(1000,3000)
-
         trialVars['trialDur']=preTime+trialVars['rewardDur']+randPad
-  
         trialVars['trialNum']=trialVars['trialNum']+1
         print('start trial #{}'.format(trialVars['trialNum']))
 
@@ -355,14 +353,19 @@ def runDetectionTask():
         lastLick=0
         stateHeader=0
         trialLicks=0
+        teensy.write('c{}>'.format(np.random.randint(0,11)).encode('utf-8'))
+        time.sleep(0.002)
+        teensy.write('o{}>'.format(np.random.randint(0,37)).encode('utf-8'))
+        time.sleep(0.002)
         teensy.write('r{}>'.format(trialVars['rewardDur']).encode('utf-8'))
         time.sleep(0.002)
-        # Send to 1, wait state.
-        teensy.write('a1>'.encode('utf-8'))  
-
         rwdHead=0
         s1Header=0
         s2Header=0
+        # Send to 1, wait state.
+        teensy.write('a1>'.encode('utf-8'))  
+
+
         while trialOn:
             try:
                 # 1) Look for data.
@@ -408,7 +411,6 @@ def runDetectionTask():
 
                     # 4) Now look at what state you are in and evaluate accordingly
                     if pyState == 1 and stateSync==1:
-            
                         if s1Header==0:
                             lickCounter=0
                             lastLick=0
@@ -424,7 +426,6 @@ def runDetectionTask():
 
                     if pyState == 2 and stateSync==1:
                         if s2Header==0:
-                           
                             reported=0
                             lickCounter=0
                             lastLick=0
@@ -484,6 +485,7 @@ def runDetectionTask():
 
     print('finished {} detection trials'.format(sesVars['totalTrials']))
     trialVars['trialNum']=0
+    teensy.write('v0>'.format().encode('utf-8'))
 
     # Update MQTT Feeds
     if sesVars['logMQTT']==1:

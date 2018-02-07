@@ -1,6 +1,7 @@
 #include <FlexiTimer2.h>
 
 #define visSerial Serial1
+
 // Interupt Timing Params.
 int sampsPerSecond = 1000;
 float evalEverySample = 1.0; // number of times to poll the vStates funtion
@@ -27,12 +28,12 @@ int rewardDelivTypeA = 0; // 0 is solenoid; 1 is syringe pump
 int rewardDelivTypeB = 0;
 
 bool blockStateChange = 0;
-bool rewarding=0;
+bool rewarding = 0;
 
-// knownLabels[]={'tState','contrast','rewardTime'};
-char knownHeaders[] = {'a', 'c', 'r'};
-int knownValues[] = {0, 0, 100};
-int knownCount = 3;
+// knownLabels[]={'tState','rewardTime','timeOut','contrast','orientation','sFreq','tFreq','visVariableUpdateBlock'};
+char knownHeaders[] = {'a', 'r', 't', 'c', 'o', 's', 'f', 'v'};
+int knownValues[] = {0, 200, 4000, 0, 0, 0, 0, 1};
+int knownCount = 7;
 
 int headerStates[] = {0, 0, 0, 0, 0, 0};
 int stateCount = 6;
@@ -50,7 +51,7 @@ void setup() {
 
   pinMode(rewardPinA, OUTPUT);
   digitalWrite(rewardPinA, LOW);
-  
+  visSerial.begin(9600);
   Serial.begin(115200);
   delay(10000);
   FlexiTimer2::set(1, evalEverySample / sampsPerSecond, vStates);
@@ -113,8 +114,6 @@ void vStates() {
         genericHeader(1);
       }
       genericStateBody();
-      visSerial.println("t1>");
-      visSerial.println("o20>");
     }
 
     // **************************
@@ -123,6 +122,7 @@ void vStates() {
     else if (tState == 2) {
       if (headerStates[2] == 0) {
         genericHeader(2);
+        visStimOn();
       }
       genericStateBody();
     }
@@ -143,17 +143,18 @@ void vStates() {
     else if (tState == 4) {
       if (headerStates[4] == 0) {
         genericHeader(4);
+        visStimOff();
         blockStateChange = 1;
         rewarding = 0;
       }
       genericStateBody();
       if (rewardDelivTypeA == 0 && rewarding == 0) {
         digitalWrite(rewardPinA, HIGH);
-        rewarding=1;
+        rewarding = 1;
       }
-      if (stateTime >= knownValues[2]) {
+      if (stateTime >= knownValues[1]) {
         digitalWrite(rewardPinA, LOW);
-        blockStateChange=0;
+        blockStateChange = 0;
       }
     }
 
@@ -163,9 +164,14 @@ void vStates() {
     else if (tState == 5) {
       if (headerStates[5] == 0) {
         genericHeader(5);
+        visStimOff();
+        blockStateChange = 1;
       }
       genericStateBody();
-      // Python will tell us to exit.
+      // trap the state in time-out til timeout time over.
+      if (stateTime >= knownValues[2]) {
+        blockStateChange = 0;
+      }
     }
 
     // Stuff we do for all non-boot states.
@@ -275,7 +281,35 @@ void genericHeader(int stateNum) {
 void genericStateBody() {
   stateTime = millis() - stateTimeOffs;
   pollLickSensors();
-  motionSensor=analogRead(motionPin);
+  motionSensor = analogRead(motionPin);
+}
+
+void visStimOff() {
+  visSerial.print('v');
+  visSerial.print(',');
+  visSerial.print(0);
+  visSerial.print(',');
+  visSerial.print(0);
+  visSerial.print(',');
+  visSerial.print(0);
+  visSerial.print(',');
+  visSerial.print(0);
+  visSerial.print(',');
+  visSerial.println(knownValues[7]);
+}
+
+void visStimOn() {
+  visSerial.print('v');
+  visSerial.print(',');
+  visSerial.print(knownValues[4]);
+  visSerial.print(',');
+  visSerial.print(knownValues[3]);
+  visSerial.print(',');
+  visSerial.print(knownValues[5]);
+  visSerial.print(',');
+  visSerial.print(knownValues[6]);
+  visSerial.print(',');
+  visSerial.println(knownValues[7]);
 }
 
 
