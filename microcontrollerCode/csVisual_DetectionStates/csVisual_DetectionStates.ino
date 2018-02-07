@@ -1,6 +1,6 @@
 #include <FlexiTimer2.h>
 
-#define visSerial Serial1
+#define visSerial Serial4
 
 // Interupt Timing Params.
 int sampsPerSecond = 1000;
@@ -19,8 +19,8 @@ int lickSensorR = 0;
 int motionSensor = 0;
 
 
-const int lickPinL = 25;
-const int lickPinR = 19;
+const int lickPinL = 18;
+const int lickPinR = 21;
 const int motionPin = 23;
 const int rewardPinA = 13;   // 35 is better, 13 is LED so good for debug.
 

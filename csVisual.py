@@ -31,10 +31,10 @@ class csVariables(object):
     
     def __init__(self,sesVarDict={},trialVars={},stimVars={}):
 
-        self.sesVarDict={'comPath_teensy':'/dev/cu.usbmodem3650661','baudRate_teensy':115200,\
+        self.sesVarDict={'comPath_teensy':'COM13','baudRate_teensy':115200,\
         'subjID':'an1','taskType':'detect','totalTrials':10,'logMQTT':1,'mqttUpDel':0.05,\
         'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,'waterConsumed':0,'consumpTarg':1.5,\
-        'dirPath':'/Users/Deister/BData','hashPath':'/Users/cad'}
+        'dirPath':'/Users/Deister/BData','hashPath':'/Users/Deister'}
         
         self.trialVars={'rewardFired':0,'rewardDur':50,'trialNum':0,'trialDur':0,\
         'lickLatchA':0,'lickAThr':500,'minNoLickTime':1000}
@@ -300,8 +300,6 @@ def runDetectionTask():
 
     # Send teensy to state 0 and flush the buffer.
     csSer.flushBuffer(teensy)
-    teensy.write('v1>'.encode('utf-8'))
-    time.sleep(0.01)
     teensy.write('a0>'.encode('utf-8'))
     time.sleep(0.01)
 
@@ -335,6 +333,8 @@ def runDetectionTask():
         pythonState=[]
         thrLicksA=[]
         motion=[]
+        contrast=[]
+        orientation=[]
 
         # Temp Trial Variability
         trialOn=1
@@ -353,9 +353,11 @@ def runDetectionTask():
         lastLick=0
         stateHeader=0
         trialLicks=0
-        teensy.write('c{}>'.format(np.random.randint(0,11)).encode('utf-8'))
+        tContrast=np.random.randint(0,11)
+        tOrientation=np.random.randint(0,37)
+        teensy.write('c{}>'.format(tContrast).encode('utf-8'))
         time.sleep(0.002)
-        teensy.write('o{}>'.format(np.random.randint(0,37)).encode('utf-8'))
+        teensy.write('o{}>'.format(tOrientation).encode('utf-8'))
         time.sleep(0.002)
         teensy.write('r{}>'.format(trialVars['rewardDur']).encode('utf-8'))
         time.sleep(0.002)
@@ -389,6 +391,8 @@ def runDetectionTask():
                     lick1_Data.append(tLick1)
                     thrLicksA.append(0)
                     motion.append(tMotion)
+                    contrast.append(tContrast)
+                    orientation.append(tOrientation)
 
 
                     # look for licks
@@ -464,7 +468,7 @@ def runDetectionTask():
 
 
         tNum=trialVars['trialNum']
-        tNPA=np.zeros([len(interrupt),9])
+        tNPA=np.zeros([len(interrupt),11])
         tNPA[:,0]=interrupt
         tNPA[:,1]=trialTime
         tNPA[:,2]=stateTime
@@ -474,7 +478,10 @@ def runDetectionTask():
         tNPA[:,6]=lick1_Data
         tNPA[:,7]=thrLicksA
         tNPA[:,8]=motion
+        tNPA[:,9]=contrast
+        tNPA[:,10]=orientation
         hdfGrp['t{}'.format(tNum)]=tNPA
+
         
         
         csPlt.updateTrialFig(trialTime,motion)
