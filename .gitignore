@@ -1,3 +1,4 @@
 # Ignore Mac DS_Store files NO STARS OR SLASHES!!!
 .DS_Store
 .ipynb_checkpoints
+*.m~
