@@ -25,10 +25,10 @@ class csVariables(object):
     
     def __init__(self,sesVarDict={},trialVars={},stimVars={}):
 
-        self.sesVarDict={'curSession':1,'comPath_teensy':'/dev/cu.usbmodem3650661','baudRate_teensy':115200,\
+        self.sesVarDict={'curSession':1,'comPath_teensy':'COM13','baudRate_teensy':115200,\
         'subjID':'an1','taskType':'detect','totalTrials':10,'logMQTT':1,'mqttUpDel':0.05,\
         'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,'waterConsumed':0,'consumpTarg':1.5,\
-        'dirPath':'/Users/Deister/BData','hashPath':'/Users/cad','trialNum':0}
+        'dirPath':'/Users/Deister/BData','hashPath':'/Users/Deister','trialNum':0}
         
         self.trialVars={'rewardFired':0,'rewardDur':200,'trialNum':0,'trialDur':0,\
         'lickLatchA':0,'lickAThr':5000,'minNoLickTime':1000}
@@ -320,15 +320,9 @@ def runDetectionTask():
     lastLick=0
     stateHeader=0
     trialLicks=0
+    tContrast=0
+    tOrientation = 0
 
-    tContrast=np.random.randint(0,11)
-    tOrientation=np.random.randint(0,37)
-    teensy.write('c{}>'.format(tContrast).encode('utf-8'))
-    time.sleep(0.002)
-    teensy.write('o{}>'.format(tOrientation).encode('utf-8'))
-    time.sleep(0.002)
-    teensy.write('r{}>'.format(trialVars['rewardDur']).encode('utf-8'))
-    time.sleep(0.002)
     rwdHead=0
     sHeaders=np.array([0,0,0,0,0,0])
     sList=[0,1,2,3,4,5]
@@ -366,6 +360,7 @@ def runDetectionTask():
             sesData[loopCnt,10]=tOrientation
             loopCnt=loopCnt+1
             
+            # this determines if we keep running
             sesVars['totalTrials']=int(totalTrials_TV.get())
             if sesVars['trialNum']>sesVars['totalTrials']:
                 sessionOn=0
@@ -409,6 +404,8 @@ def runDetectionTask():
                     preTime=np.random.randint(200,5000)
                     contrastList.append(tContrast)
                     orientationList.append(tOrientation)
+                    teensy.write('c{}>'.format(tContrast).encode('utf-8'))
+                    teensy.write('o{}>'.format(tOrientation).encode('utf-8'))
                     # update the trial
                     sesVars['trialNum']=sesVars['trialNum']+1
                     print('start trial #{}'.format(sesVars['trialNum']))
