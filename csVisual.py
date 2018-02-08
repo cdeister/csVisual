@@ -21,23 +21,17 @@ import pandas as pd
 
 root = Tk()
 
-#todo list:
-# weight auto
-# month boundary
-# sheet log
-# reset mq
-
 class csVariables(object):
     
     def __init__(self,sesVarDict={},trialVars={},stimVars={}):
 
-        self.sesVarDict={'comPath_teensy':'COM13','baudRate_teensy':115200,\
+        self.sesVarDict={'curSession':1,'comPath_teensy':'/dev/cu.usbmodem3650661','baudRate_teensy':115200,\
         'subjID':'an1','taskType':'detect','totalTrials':10,'logMQTT':1,'mqttUpDel':0.05,\
         'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,'waterConsumed':0,'consumpTarg':1.5,\
-        'dirPath':'/Users/Deister/BData','hashPath':'/Users/Deister'}
+        'dirPath':'/Users/Deister/BData','hashPath':'/Users/cad','trialNum':0}
         
-        self.trialVars={'rewardFired':0,'rewardDur':50,'trialNum':0,'trialDur':0,\
-        'lickLatchA':0,'lickAThr':500,'minNoLickTime':1000}
+        self.trialVars={'rewardFired':0,'rewardDur':200,'trialNum':0,'trialDur':0,\
+        'lickLatchA':0,'lickAThr':5000,'minNoLickTime':1000}
 
         self.stimVars={'contrast':1,'sFreq':4,'orientation':0}
 
@@ -57,24 +51,6 @@ class csHDF(object):
 
         self.sesHDF = h5py.File(basePath+"{}_behav_{}.hdf".format(subID,dateStamp), "a")
         return self.sesHDF
-    
-    def makeSesGroup(self,hdfObj,sessionNum):
-
-        # if sessionNum is -1 it will guess.
-        curSes=sessionNum
-        if sessionNum==-1:
-            exSes=0
-            for keys in hdfObj:
-                exSes=exSes+1
-            curSes=exSes+1
-        try:
-            hdfGrp=hdfObj.create_group('session_{}'.format(curSes))
-            self.hdfGrp=hdfGrp
-        except:
-            print("failed to make group; wrong hdf?")
-            self.hdfGrp=[]
-
-        return self.hdfGrp
 
 class csMQTT(object):
 
@@ -160,7 +136,6 @@ class csMQTT(object):
 
         # c) log the weight to subject's weight tracking feed.
         mqObj.send('{}_weight'.format(sID,sWeight),sWeight)
-
 class csSerial(object):
 
     def __init__(self,a):
@@ -198,7 +173,6 @@ class csSerial(object):
                 returnVar=int(tString[varNumInd])
         self.returnVar=returnVar
         return self.returnVar
-
 class csPlot(object):
 
     def __init__(self,a):
@@ -264,19 +238,19 @@ def getPath():
     subjID_TV.set(os.path.basename(selectPath))
     sesVars['dirPath']=selectPath
     sesVars['subjID']=os.path.basename(selectPath)
-
-
 def runDetectionTask():
+    # make a plot
     detectPlotNum=100
-    sesVars['totalTrials']=int(totalTrials_TV.get())
-    # make an instances of all necessary classes.
     
-    
+    # get total trials from the gui if available.
+    try:
+        sesVars['totalTrials']=int(totalTrials_TV.get())
+    except:
+        a=1
+      
     trialVars=csVar.trialVars
-    f=csSesHDF.makeHDF(sesVars['dirPath']+'/',sesVars['subjID'],dStamp)
-    hdfGrp=csSesHDF.makeSesGroup(f,-1)
-
-
+    f=csSesHDF.makeHDF(sesVars['dirPath']+'/',sesVars['subjID'] + '_ses{}'.format(sesVars['curSession']),dStamp)
+    
     # Update MQTT Feeds
     if sesVars['logMQTT']==1:
         aioHashPath=sesVars['hashPath'] + '/simpHashes/cdIO.txt'
@@ -305,194 +279,217 @@ def runDetectionTask():
 
     csPlt.makeTrialFig(detectPlotNum)
 
-
     # Initialize some stuff
     tTeensyState=-1
-    while trialVars['trialNum']<sesVars['totalTrials']:
+    
 
-        # Go ahead and check the state:
-        tTeensyState=csSer.checkVariable(tTeensyState,teensy,'a',2,0.005)
-        fb=0
-        while tTeensyState != 0:
-            if fb==0:
-                print("not in 0, will force")
-                fb=1
-            teensy.write('a0>'.encode('utf-8'))
-            time.sleep(0.005)
-            tTeensyState=csSer.checkVariable(tTeensyState,teensy,'a',2,0.005)
-
-        csSer.flushBuffer(teensy)
-
-        # set up trial data handling.
-        interrupt=[]
-        trialTime=[]
-        stateTime=[]
-        teensyState=[]
-        lick0_Data=[]
-        lick1_Data=[]
-        pythonState=[]
-        thrLicksA=[]
-        motion=[]
-        contrast=[]
-        orientation=[]
-
-        # Temp Trial Variability
-        trialOn=1
-        trialVars['rewardFired']=0
-        preTime=np.random.randint(200,5000)
-        trialVars['rewardDur']=333
-        randPad=np.random.randint(1000,3000)
-        trialVars['trialDur']=preTime+trialVars['rewardDur']+randPad
-        trialVars['trialNum']=trialVars['trialNum']+1
-        print('start trial #{}'.format(trialVars['trialNum']))
-
-        # start pyState at 1
-
-        pyState=1
-        lickCo=0  
-        lastLick=0
-        stateHeader=0
-        trialLicks=0
-        tContrast=np.random.randint(0,11)
-        tOrientation=np.random.randint(0,37)
-        teensy.write('c{}>'.format(tContrast).encode('utf-8'))
-        time.sleep(0.002)
-        teensy.write('o{}>'.format(tOrientation).encode('utf-8'))
-        time.sleep(0.002)
-        teensy.write('r{}>'.format(trialVars['rewardDur']).encode('utf-8'))
-        time.sleep(0.002)
-        rwdHead=0
-        s1Header=0
-        s2Header=0
-        # Send to 1, wait state.
-        teensy.write('a1>'.encode('utf-8'))  
-
-
-        while trialOn:
-            try:
-                # 1) Look for data.
-                [tString,dNew]=csSer.readSerialData(teensy,'tData',8)
-                if dNew:
-                    tInterrupt=int(tString[1])
-                    tTrialTime=int(tString[2])
-                    tStateTime=int(tString[3])
-                    tTeensyState=int(tString[4])
-                    tLick0=int(tString[5])
-                    tLick1=int(tString[6])
-                    tMotion=int(tString[7])
-
-
-                    interrupt.append(tInterrupt)
-                    trialTime.append(tTrialTime)
-                    stateTime.append(tStateTime)
-                    teensyState.append(tTeensyState)
-                    pythonState.append(pyState)
-                    lick0_Data.append(tLick0)
-                    lick1_Data.append(tLick1)
-                    thrLicksA.append(0)
-                    motion.append(tMotion)
-                    contrast.append(tContrast)
-                    orientation.append(tOrientation)
-
-
-                    # look for licks
-                    if tLick0>trialVars['lickAThr'] and trialVars['lickLatchA']==0:
-                        thrLicksA[-1]=1
-                        trialVars['lickLatchA']=20
-                        trialLicks=trialLicks+1
-                    elif tLick0<=trialVars['lickAThr'] or trialVars['lickLatchA']>0:
-                        trialVars['lickLatchA']=trialVars['lickLatchA']-1
-
-                    # 2) Does pyState match tState?
-                    if pyState == tTeensyState:
-                        stateSync=1
-                    elif pyState != tTeensyState:
-                        stateSync=0
-
-                    # 3) Push state change if off.
-                    if stateSync==0:
-                        teensy.write('a{}>'.format(pyState).encode('utf-8'))  
-
-                    # 4) Now look at what state you are in and evaluate accordingly
-                    if pyState == 1 and stateSync==1:
-                        if s1Header==0:
-                            lickCounter=0
-                            lastLick=0
-                            s2Header=0
-                            s1Header=1
-                        if thrLicksA[-1] == 1:
-                            lickCounter=lickCounter+1
-                            lastLick=tStateTime
-                        if (tStateTime-lastLick)>trialVars['minNoLickTime'] and tStateTime>preTime:
-                            stateSync=0
-                            pyState=2
-                            teensy.write('a2>'.encode('utf-8'))
-
-                    if pyState == 2 and stateSync==1:
-                        if s2Header==0:
-                            reported=0
-                            lickCounter=0
-                            lastLick=0
-                            minStimTime=1000
-                            s1Header=0
-                            s2Header=1
-                        
-                        if thrLicksA[-1] == 1:
-                            lickCounter=lickCounter+1
-                            lastLick=tStateTime
-                            if tStateTime>0.005:
-                                reported=1
-                                print("reported")
-
-                        if tStateTime>minStimTime:
-                            if reported==1:
-                                stateSync=0
-                                pyState=4
-                                teensy.write('a4>'.encode('utf-8'))
-                            elif reported==0: #todo: this should go to 0 after some time
-                                stateSync=0
-                                pyState=4
-                                teensy.write('a4>'.encode('utf-8'))
-                
-
-                    if pyState == 4 and stateSync==1:
-                        if rwdHead==0:
-                            sesVars['waterConsumed']=sesVars['waterConsumed']+sesVars['volPerRwd']
-                            rwdHead=1
-                        if tStateTime>trialVars['rewardDur']+randPad:
-                            stateSync=0
-                            trialOn=0
-
-            except:
-                trialOn=0
-
-
-        tNum=trialVars['trialNum']
-        tNPA=np.zeros([len(interrupt),11])
-        tNPA[:,0]=interrupt
-        tNPA[:,1]=trialTime
-        tNPA[:,2]=stateTime
-        tNPA[:,3]=teensyState
-        tNPA[:,4]=pythonState
-        tNPA[:,5]=lick0_Data
-        tNPA[:,6]=lick1_Data
-        tNPA[:,7]=thrLicksA
-        tNPA[:,8]=motion
-        tNPA[:,9]=contrast
-        tNPA[:,10]=orientation
-        hdfGrp['t{}'.format(tNum)]=tNPA
-
-        
-        
-        csPlt.updateTrialFig(trialTime,motion)
-
+    # Go ahead and check the state:
+    tTeensyState=csSer.checkVariable(tTeensyState,teensy,'a',2,0.005)
+    fb=0
+    while tTeensyState != 0:
+        if fb==0:
+            print("not in 0, will force")
+            fb=1
         teensy.write('a0>'.encode('utf-8'))
-        print('last trial took: {} seconds'.format(trialTime[-1]/1000))
         time.sleep(0.005)
+        tTeensyState=csSer.checkVariable(tTeensyState,teensy,'a',2,0.005)
+
+    csSer.flushBuffer(teensy)
+
+    # set up trial data handling.
+    sesVars['maxDur']=7200
+    sesVars['sampRate']=1000
+    npSamps=sesVars['maxDur']*sesVars['sampRate']
+    dStreams=11
+    sesData=np.zeros([npSamps,dStreams])
+    dStreamLables=['interrupt','trialTime','stateTime','teensyState','lick0_Data',\
+    'lick1_Data','pythonState','thrLicksA','motion','contrast','orientation']
+
+    # Temp Trial Variability
+    sessionOn=1
+    trialVars['rewardDur']=250
+
+    preTime=np.random.randint(200,5000)
+    trialVars['trialDur']=preTime+trialVars['rewardDur']
+
+
+    # start pyState at 1
+
+    pyState=1
+    lickCo=0  
+    lastLick=0
+    stateHeader=0
+    trialLicks=0
+
+    tContrast=np.random.randint(0,11)
+    tOrientation=np.random.randint(0,37)
+    teensy.write('c{}>'.format(tContrast).encode('utf-8'))
+    time.sleep(0.002)
+    teensy.write('o{}>'.format(tOrientation).encode('utf-8'))
+    time.sleep(0.002)
+    teensy.write('r{}>'.format(trialVars['rewardDur']).encode('utf-8'))
+    time.sleep(0.002)
+    rwdHead=0
+    sHeaders=np.array([0,0,0,0,0,0])
+    sList=[0,1,2,3,4,5]
+    trialPltUpdate=1
+    trialSamps=[0,0]
+    sampLog=[]
+    # Send to 1, wait state.
+    teensy.write('a1>'.encode('utf-8'))  
+    contrastList=[]
+    orientationList=[]
+    loopCnt=0
+    while sessionOn:
+        # 1) Look for data every loop
+        [tString,dNew]=csSer.readSerialData(teensy,'tData',8)
+        if dNew:
+            tInterrupt=int(tString[1])
+            tTrialTime=int(tString[2])
+            tStateTime=int(tString[3])
+            tTeensyState=int(tString[4])
+            tLick0=int(tString[5])
+            tLick1=int(tString[6])
+            tMotion=int(tString[7])
+
+            tFrameCount=0  # Todo: frame counter in.
+            sesData[loopCnt,0]=tInterrupt
+            sesData[loopCnt,1]=tTrialTime
+            sesData[loopCnt,2]=tStateTime
+            sesData[loopCnt,3]=tTeensyState
+            sesData[loopCnt,4]=pyState
+            sesData[loopCnt,5]=tLick0
+            sesData[loopCnt,6]=tLick1
+            sesData[loopCnt,7]=0
+            sesData[loopCnt,8]=tMotion
+            sesData[loopCnt,9]=tContrast
+            sesData[loopCnt,10]=tOrientation
+            loopCnt=loopCnt+1
+            
+            sesVars['totalTrials']=int(totalTrials_TV.get())
+            if sesVars['trialNum']>sesVars['totalTrials']:
+                sessionOn=0
+
+            # look for licks
+            if tLick0>trialVars['lickAThr'] and trialVars['lickLatchA']==0:
+                sesData[-1,7]=1
+                trialVars['lickLatchA']=20
+                trialLicks=trialLicks+1
+
+            elif tLick0<=trialVars['lickAThr'] or trialVars['lickLatchA']>0:
+                trialVars['lickLatchA']=trialVars['lickLatchA']-1
+
+            # 2) Does pyState match tState?
+            if pyState == tTeensyState:
+                stateSync=1
+
+            elif pyState != tTeensyState:
+                stateSync=0
+
+            # 3) Push state change if off.
+            if stateSync==0:
+                teensy.write('a{}>'.format(pyState).encode('utf-8'))  
+
+            
+            
+            # 4) Now look at what state you are in and evaluate accordingly
+            if pyState == 1 and stateSync==1:
+                
+                if sHeaders[pyState]==0:
+                    trialSamps[0]=loopCnt-1
+
+                    # reset counters that track state stuff.
+                    lickCounter=0
+                    lastLick=0
+                    trialPltUpdate=1
+
+                    # get contrast and orientation
+                    tContrast=np.random.randint(0,11)
+                    tOrientation=np.random.randint(0,37)
+                    preTime=np.random.randint(200,5000)
+                    contrastList.append(tContrast)
+                    orientationList.append(tOrientation)
+                    # update the trial
+                    sesVars['trialNum']=sesVars['trialNum']+1
+                    print('start trial #{}'.format(sesVars['trialNum']))
+                    print('contrast: {} orientation: {}'.format(tContrast,tOrientation))
+
+                    # close the header and flip the others open.
+                    sHeaders[pyState]=1
+                    sHeaders[np.setdiff1d(sList,pyState)]=0
+                # look for licks    
+                if sesData[-1,7] == 1:
+                    lickCounter=lickCounter+1
+                    lastLick=tStateTime
+                
+                # exit if we've waited long enough (preTime) and animal isn't licking.
+                if (tStateTime-lastLick)>trialVars['minNoLickTime'] and tStateTime>preTime:
+                    # we know we will be out of sync
+                    stateSync=0
+                    # we set python to new state.
+                    pyState=2
+                    # we ask teensy to go to new state.
+                    teensy.write('a2>'.encode('utf-8'))
+
+            if pyState == 2 and stateSync==1:
+                if sHeaders[pyState]==0:
+                    reported=0
+                    lickCounter=0
+                    lastLick=0
+                    minStimTime=1000
+                    
+                    sHeaders[pyState]=1
+                    sHeaders[np.setdiff1d(sList,pyState)]=0
+                
+                if sesData[-1,7] == 1:
+                    lickCounter=lickCounter+1
+                    lastLick=tStateTime
+                    if tStateTime>0.005:
+                        reported=1
+                        print("reported")
+
+                if tStateTime>minStimTime:
+                    if reported==1:
+                        stateSync=0
+                        pyState=4
+                        teensy.write('a4>'.encode('utf-8'))
+                    elif reported==0: #todo: this should go to 0 after some time
+                        stateSync=0
+                        pyState=4
+                        teensy.write('a4>'.encode('utf-8'))
+        
+            if pyState == 4 and stateSync==1:
+                if sHeaders[pyState]==0:
+                    sesVars['waterConsumed']=sesVars['waterConsumed']+sesVars['volPerRwd']
+                    sHeaders[pyState]=1
+                    sHeaders[np.setdiff1d(sList,pyState)]=0
+                
+                # exit
+                if tStateTime>trialVars['rewardDur']:
+                    trialSamps[1]=loopCnt
+                    sampLog.append(trialSamps[1]-trialSamps[0])
+                    stateSync=0
+                    pyState=1
+                    teensy.write('a1>'.encode('utf-8'))
+                    print('last trial took: {} seconds'.format(sampLog[-1]/1000))
+                    print(sessionOn)
+                    if trialPltUpdate:
+                        csPlt.updateTrialFig(sesData[trialSamps[0]:trialSamps[1],1]-sesData[trialSamps[0],1],\
+                            sesData[trialSamps[0]:trialSamps[1],8])
+                        trialPltUpdate=0                           
+    
+    f["session_{}".format(sesVars['curSession'])]=sesData[0:loopCnt,:]
+    f["session_{}".format(sesVars['curSession'])].attrs['contrasts']=contrastList
+    f["session_{}".format(sesVars['curSession'])].attrs['orientations']=orientationList
+    f.close()
+
+    sesVars['curSession']=sesVars['curSession']+1
+    teensy.write('a0>'.encode('utf-8'))
+    time.sleep(0.05)
+    teensy.write('a0>'.encode('utf-8'))
 
     print('finished {} detection trials'.format(sesVars['totalTrials']))
-    trialVars['trialNum']=0
-    teensy.write('v0>'.format().encode('utf-8'))
+    sesVars['trialNum']=0
 
     # Update MQTT Feeds
     if sesVars['logMQTT']==1:
@@ -511,12 +508,9 @@ def runDetectionTask():
         aio.send('{}_topVol'.format(sesVars['subjID']),topAmount)
         
     teensy.close()
-
-
 def closeup():
     try:
         plt.close(detectPlotNum)
-        f.close()
         os._exit(1)
     except:
         os._exit(1)

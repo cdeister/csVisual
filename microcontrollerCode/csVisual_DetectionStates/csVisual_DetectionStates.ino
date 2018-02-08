@@ -1,6 +1,6 @@
 #include <FlexiTimer2.h>
 
-#define visSerial Serial4
+#define visSerial Serial1
 
 // Interupt Timing Params.
 int sampsPerSecond = 1000;
