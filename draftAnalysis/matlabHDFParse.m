@@ -1,33 +1,17 @@
-%%
+%% Grab Behavior HDF
 [hdfName,hdfPath]=uigetfile('*','what what?');
+behavHDFPath=[hdfPath hdfName];
+behavHDFInfo=h5info(behavHDFPath);
+curDatasetPath=['/' behavHDFInfo.Datasets.Name];
 
-fullHdfPath=[hdfPath hdfName];
-% h5disp(fullHdfPath)
-h5InfoObj=h5info(fullHdfPath);
+curBData=h5read(behavHDFPath,curDatasetPath);
+% attributes have int32 encoding and need to be converted.
+curOrientations=double(h5readatt(behavHDFPath,curDatasetPath,'orientations')).*10;
+curContrasts=double(h5readatt(behavHDFPath,curDatasetPath,'contrasts'))/10;
 
-%% parse a specific trial
+%% Now we can look for state times. 
+% I wrote a function that parses a state.
 
-trialNum=1;
-groupPath=h5InfoObj.Groups.Name;
-curTData=h5read(fullHdfPath,[groupPath '/t' num2str(trialNum)]);
-% example to itterate on known name.
-% make a string map that lines up with teensydata
-dataMap={'interrupt','trialTime','stateTime'};
-% then you can logically index on a string like this. 
-strcmp(dataMap,'interrupt')
-figure,plot(curTData(strcmp(dataMap,'interrupt'),:))
-
-%% get a contrast & orientation for all trials
-
-% lets find the total number of datasets 
-totTrials=numel(h5InfoObj.Groups.Datasets);
-
-for n=1:totTrials
-    tData=h5read(fullHdfPath,[groupPath '/t' num2str(n)]);
-    orient(:,n)=tData(11,1)*10;
-    contrast(:,n)=tData(10,1)/10;
-    clear tData;
-end
 
 %% sort list magic!!!!
 
