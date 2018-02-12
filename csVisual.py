@@ -1,4 +1,8 @@
-#csVisual v0.3
+#csVisual v0.5
+# 
+# Chris Deister - cdeister@brown.edu
+# Anything that is licenseable is governed by a MIT License found in the github directory. 
+# Get smart by making and sharing.
 
 
 from tkinter import *
@@ -25,23 +29,55 @@ class csVariables(object):
     
     def __init__(self,sesVarDict={},trialVars={},stimVars={}):
 
-        self.sesVarDict={'curSession':1,'comPath_teensy':'COM13','baudRate_teensy':115200,\
+        self.sesVarDict={'curSession':1,'comPath_teensy':'/dev/cu.usbmodem3650661','baudRate_teensy':115200,\
         'subjID':'an1','taskType':'detect','totalTrials':10,'logMQTT':1,'mqttUpDel':0.05,\
         'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,'waterConsumed':0,'consumpTarg':1.5,\
-        'dirPath':'/Users/Deister/BData','hashPath':'/Users/Deister','trialNum':0}
-        
+        'dirPath':'/Users/Deister/BData','hashPath':'/Users/cad','trialNum':0}
+
         self.trialVars={'rewardFired':0,'rewardDur':200,'trialNum':0,'trialDur':0,\
         'lickLatchA':0,'lickAThr':5000,'minNoLickTime':1000}
 
         self.stimVars={'contrast':1,'sFreq':4,'orientation':0}
-
-
     def getRig(self):
         # returns a string that is the hostname
         mchString=socket.gethostname()
         self.hostMachine=mchString.split('.')[0]
         return self.hostMachine
+    
+    def dictToPandas(self,dictName):
+        curKey=[]
+        curVal=[]
+        for key in list(dictName.keys()):
+            curKey.append(key)
+            curVal.append(dictName[key])
+            self.pdReturn=pd.Series(curVal,index=curKey)
+        return self.pdReturn
 
+    def pandasToDict(self,pdName,curDict,colNum):
+
+        varIt=0
+        csvNum=0
+
+        for k in list(pdName.index):
+
+            if len(pdName.shape)>1:
+                a=pdName[colNum][varIt]
+                csvNum=pdName.shape[1]
+            elif len(pdName.shape)==1:
+                a=pdName[varIt]
+
+            try:
+                a=float(a)
+                if a.is_integer():
+                    a=int(a)
+                curDict[k]=a
+                varIt=varIt+1
+
+            except:
+                curDict[k]=a
+                varIt=varIt+1
+        
+        return curDict
 class csHDF(object):
 
     def __init__(self,a):
@@ -51,7 +87,6 @@ class csHDF(object):
 
         self.sesHDF = h5py.File(basePath+"{}_behav_{}.hdf".format(subID,dateStamp), "a")
         return self.sesHDF
-
 class csMQTT(object):
 
     def __init__(self,dStamp):
@@ -67,6 +102,7 @@ class csMQTT(object):
         # Get last reward count logged.
         # assume nothing
         waterConsumed=0
+        hourDif=22
         # I assume the mqtt gmt day is the same as our rigs day for now.
         dayOffset=0
         monthOffset=0
@@ -105,6 +141,7 @@ class csMQTT(object):
 
                     if hourDif<=hourThresh:
                         waterConsumed=float('{:0.3f}'.format(float(gDP.value)))
+        
         
         self.waterConsumed=waterConsumed
         self.hourDif=hourDif
@@ -184,6 +221,7 @@ class csPlot(object):
         
         # Make feedback figure.
         self.trialFig = plt.figure(fNum)
+        self.trialFig.suptitle('trial # 0 of ?',fontsize=10)
         plt.show(block=False)
         self.trialFig.canvas.flush_events()
 
@@ -202,18 +240,26 @@ class csPlot(object):
         self.lA_Axes.draw_artist(self.lA_Axes.patch)
         self.trialFig.canvas.flush_events()
 
-    def updateTrialFig(self,xData,yData):
-        try:
-            self.lA_Line.set_xdata(xData)
-            self.lA_Line.set_ydata(yData)
-            self.lA_Axes.set_xlim([xData[0],xData[-1]])
-            self.lA_Axes.draw_artist(self.lA_Line)
-            self.lA_Axes.draw_artist(self.lA_Axes.patch)
-            self.trialFig.canvas.draw_idle()
-            self.trialFig.canvas.flush_events()
-        except:
-            a=1
+    def quickUpdateTrialFig(self,trialNum,totalTrials):
+        self.trialFig.suptitle('trial # {} of {}'.format(trialNum,totalTrials),fontsize=10)
+        self.trialFig.canvas.flush_events()
 
+
+    def updateTrialFig(self,xData,yData,trialNum,totalTrials):
+        # try:
+        self.trialFig.suptitle('trial # {} of {}'.format(trialNum,totalTrials),fontsize=10)
+        self.lA_Line.set_xdata(xData)
+        self.lA_Line.set_ydata(yData)
+        self.lA_Axes.set_xlim([xData[0],xData[-1]])
+        self.lA_Axes.draw_artist(self.lA_Line)
+        self.lA_Axes.draw_artist(self.lA_Axes.patch)
+        self.trialFig.canvas.draw_idle()
+        self.trialFig.canvas.flush_events()
+        # except:
+        #     a=1
+        #     # self.trialFig.canvas.flush_events()
+
+# initialize class instances and some flags.
 makeBar=0
 csVar=csVariables(1)
 csSesHDF=csHDF(1)
@@ -238,10 +284,38 @@ def getPath():
     subjID_TV.set(os.path.basename(selectPath))
     sesVars['dirPath']=selectPath
     sesVars['subjID']=os.path.basename(selectPath)
+    print(sesVars)
+    # if there is a sesVars.csv load it. 
+    try:
+        tempMeta=pd.read_csv(selectPath +'/' + 'sesVars.csv',index_col=0,header=None)
+        for x in range(0,len(tempMeta)):
+            varKey=tempMeta.iloc[x].name
+            varVal=tempMeta.iloc[x][1]
+            
+            # now we need to divine curVar's data type.
+            # we first try to see if it is numeric.
+            try:
+                tType=float(varVal)
+                try:
+                    tType=int(tType)
+                except:
+                    g=1
+            except:
+                tType=varVal
+            sesVars[varKey]=tType
+            # update any text variables that may exist.
+            try:
+                exec(varKey + '_TV.set({})'.format(tType))
+            except:
+                g=1
+    except:
+        g=1
+
+    
+    print(sesVars)
 def runDetectionTask():
     # make a plot
     detectPlotNum=100
-    
     # get total trials from the gui if available.
     try:
         sesVars['totalTrials']=int(totalTrials_TV.get())
@@ -300,7 +374,7 @@ def runDetectionTask():
     sesVars['maxDur']=7200
     sesVars['sampRate']=1000
     npSamps=sesVars['maxDur']*sesVars['sampRate']
-    dStreams=11
+    dStreams=9
     sesData=np.zeros([npSamps,dStreams])
     dStreamLables=['interrupt','trialTime','stateTime','teensyState','lick0_Data',\
     'lick1_Data','pythonState','thrLicksA','motion','contrast','orientation']
@@ -347,19 +421,20 @@ def runDetectionTask():
             tMotion=int(tString[7])
 
             tFrameCount=0  # Todo: frame counter in.
-            sesData[loopCnt,0]=tInterrupt
-            sesData[loopCnt,1]=tTrialTime
-            sesData[loopCnt,2]=tStateTime
-            sesData[loopCnt,3]=tTeensyState
+            sesData[loopCnt,0]=int(tString[1])
+            sesData[loopCnt,1]=int(tString[2])
+            sesData[loopCnt,2]=int(tString[3])
+            sesData[loopCnt,3]=int(tString[4])
             sesData[loopCnt,4]=pyState
-            sesData[loopCnt,5]=tLick0
-            sesData[loopCnt,6]=tLick1
+            sesData[loopCnt,5]=int(tString[5])
+            sesData[loopCnt,6]=int(tString[6])
             sesData[loopCnt,7]=0
-            sesData[loopCnt,8]=tMotion
-            sesData[loopCnt,9]=tContrast
-            sesData[loopCnt,10]=tOrientation
+            sesData[loopCnt,8]=int(tString[7])
             loopCnt=loopCnt+1
-            
+            if loopCnt>200 and np.mod(loopCnt,500)==0:
+                csPlt.updateTrialFig(np.arange(len(sesData[loopCnt-200:loopCnt,8])),sesData[loopCnt-200:loopCnt,8],sesVars['trialNum'],sesVars['totalTrials'])
+
+
             # this determines if we keep running
             sesVars['totalTrials']=int(totalTrials_TV.get())
             if sesVars['trialNum']>sesVars['totalTrials']:
@@ -470,15 +545,16 @@ def runDetectionTask():
                     teensy.write('a1>'.encode('utf-8'))
                     print('last trial took: {} seconds'.format(sampLog[-1]/1000))
                     print(sessionOn)
-                    if trialPltUpdate:
-                        csPlt.updateTrialFig(sesData[trialSamps[0]:trialSamps[1],1]-sesData[trialSamps[0],1],\
-                            sesData[trialSamps[0]:trialSamps[1],8])
-                        trialPltUpdate=0                           
+                    # if trialPltUpdate:
+                    #     csPlt.updateTrialFig(sesData[trialSamps[0]:trialSamps[1],1]-sesData[trialSamps[0],1],\
+                    #         sesData[trialSamps[0]:trialSamps[1],8],sesVars['trialNum'],sesVars['totalTrials'])
+                    #     trialPltUpdate=0                           
     
     f["session_{}".format(sesVars['curSession'])]=sesData[0:loopCnt,:]
     f["session_{}".format(sesVars['curSession'])].attrs['contrasts']=contrastList
     f["session_{}".format(sesVars['curSession'])].attrs['orientations']=orientationList
     f.close()
+
 
     sesVars['curSession']=sesVars['curSession']+1
     teensy.write('a0>'.encode('utf-8'))
@@ -487,6 +563,8 @@ def runDetectionTask():
 
     print('finished {} detection trials'.format(sesVars['totalTrials']))
     sesVars['trialNum']=0
+    sesVars_bindings=csVar.dictToPandas(sesVars)
+    sesVars_bindings.to_csv(sesVars['dirPath'] + '/' +'sesVars.csv')
 
     # Update MQTT Feeds
     if sesVars['logMQTT']==1:
@@ -506,6 +584,9 @@ def runDetectionTask():
         
     teensy.close()
 def closeup():
+
+    sesVars_bindings=csVar.dictToPandas(sesVars)
+    sesVars_bindings.to_csv(sesVars['dirPath'] + '/' +'sesVars.csv')
     try:
         plt.close(detectPlotNum)
         os._exit(1)
