@@ -32,7 +32,7 @@ class csVariables(object):
         self.sesVarDict={'curSession':1,'comPath_teensy':'/dev/cu.usbmodem3650661','baudRate_teensy':115200,\
         'subjID':'an1','taskType':'detect','totalTrials':10,'logMQTT':1,'mqttUpDel':0.05,\
         'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,'waterConsumed':0,'consumpTarg':1.5,\
-        'dirPath':'/Users/Deister/BData','hashPath':'/Users/cad','trialNum':0}
+        'dirPath':'/Users/Deister/BData','hashPath':'/Users/cad','trialNum':0,'sessionOn':1,'canQuit':1}
 
         self.trialVars={'rewardFired':0,'rewardDur':200,'trialNum':0,'trialDur':0,\
         'lickLatchA':0,'lickAThr':5000,'minNoLickTime':1000}
@@ -43,7 +43,6 @@ class csVariables(object):
         mchString=socket.gethostname()
         self.hostMachine=mchString.split('.')[0]
         return self.hostMachine
-    
     def dictToPandas(self,dictName):
         curKey=[]
         curVal=[]
@@ -52,7 +51,6 @@ class csVariables(object):
             curVal.append(dictName[key])
             self.pdReturn=pd.Series(curVal,index=curKey)
         return self.pdReturn
-
     def pandasToDict(self,pdName,curDict,colNum):
 
         varIt=0
@@ -221,17 +219,21 @@ class csPlot(object):
         
         # Make feedback figure.
         self.trialFig = plt.figure(fNum)
-        self.trialFig.suptitle('trial # 0 of ?',fontsize=10)
+        self.trialFig.suptitle('trial # 0 of  ; State # ',fontsize=10)
         plt.show(block=False)
         self.trialFig.canvas.flush_events()
-
+        self.trialFramePosition='+360+0' # can be specified elsewhere
+        self.trialFramePosition
+        mng = plt.get_current_fig_manager()
+        eval('mng.window.wm_geometry("{}")'.format(self.trialFramePosition))
         # add the lickA axes and lines.
-        lA_YMin=0
-        lA_YMax=1000
+        lA_YMin=-0.2
+        lA_YMax=5.2
         self.lA_Axes=self.trialFig.add_subplot(2,2,1) #col,rows
         self.lA_Axes.set_ylim([lA_YMin,lA_YMax])
+        self.lA_Axes.set_xticks([])
         self.lA_Axes.set_yticks([])
-        self.lA_Line,=self.lA_Axes.plot([],color="olive",lw=1)
+        self.lA_Line,=self.lA_Axes.plot([],color="cornflowerblue",lw=1)
 
         self.trialFig.canvas.draw_idle()
         plt.show(block=False)
@@ -240,24 +242,31 @@ class csPlot(object):
         self.lA_Axes.draw_artist(self.lA_Axes.patch)
         self.trialFig.canvas.flush_events()
 
-    def quickUpdateTrialFig(self,trialNum,totalTrials):
-        self.trialFig.suptitle('trial # {} of {}'.format(trialNum,totalTrials),fontsize=10)
+
+    def quickUpdateTrialFig(self,trialNum,totalTrials,curState):
+        self.trialFig.suptitle('trial # {} of {}; State # {}'.format(trialNum,totalTrials,curState),fontsize=10)
         self.trialFig.canvas.flush_events()
 
 
-    def updateTrialFig(self,xData,yData,trialNum,totalTrials):
-        # try:
-        self.trialFig.suptitle('trial # {} of {}'.format(trialNum,totalTrials),fontsize=10)
-        self.lA_Line.set_xdata(xData)
-        self.lA_Line.set_ydata(yData)
-        self.lA_Axes.set_xlim([xData[0],xData[-1]])
-        self.lA_Axes.draw_artist(self.lA_Line)
-        self.lA_Axes.draw_artist(self.lA_Axes.patch)
-        self.trialFig.canvas.draw_idle()
-        self.trialFig.canvas.flush_events()
-        # except:
-        #     a=1
-        #     # self.trialFig.canvas.flush_events()
+    def updateTrialFig(self,xData,yData,trialNum,totalTrials,curState):
+        try:
+            self.trialFig.suptitle('trial # {} of {}; State # {}'.format(trialNum,totalTrials,curState),fontsize=10)
+            self.lA_Line.set_xdata(xData)
+            self.lA_Line.set_ydata(yData)
+            self.lA_Axes.set_xlim([xData[0],xData[-1]])
+            self.lA_Axes.draw_artist(self.lA_Line)
+            self.lA_Axes.draw_artist(self.lA_Axes.patch)
+            self.trialFig.canvas.draw_idle()
+            self.trialFig.canvas.flush_events()
+        except:
+             a=1
+             # self.trialFig.canvas.flush_events()
+
+
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+# $$$$$$$$$$$$$ Main Program Body $$$$$$$$$$$$$$$$
+# $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+
 
 # initialize class instances and some flags.
 makeBar=0
@@ -267,12 +276,16 @@ csAIO=csMQTT(1)
 csSer=csSerial(1)
 csPlt=csPlot(1)
 
+csPlt.makeTrialFig(100)
+
 # datestamp
 cTime = datetime.datetime.now()
 dStamp=cTime.strftime("%m_%d_%Y")
 
 curMachine=csVar.getRig()
 sesVars=csVar.sesVarDict
+
+
 
 def getPath():
     try:
@@ -284,7 +297,6 @@ def getPath():
     subjID_TV.set(os.path.basename(selectPath))
     sesVars['dirPath']=selectPath
     sesVars['subjID']=os.path.basename(selectPath)
-    print(sesVars)
     # if there is a sesVars.csv load it. 
     try:
         tempMeta=pd.read_csv(selectPath +'/' + 'sesVars.csv',index_col=0,header=None)
@@ -311,10 +323,9 @@ def getPath():
     except:
         g=1
 
-    
-    print(sesVars)
+
 def runDetectionTask():
-    # make a plot
+    
     detectPlotNum=100
     # get total trials from the gui if available.
     try:
@@ -323,7 +334,6 @@ def runDetectionTask():
         a=1
       
     trialVars=csVar.trialVars
-    f=csSesHDF.makeHDF(sesVars['dirPath']+'/',sesVars['subjID'] + '_ses{}'.format(sesVars['curSession']),dStamp)
     
     # Update MQTT Feeds
     if sesVars['logMQTT']==1:
@@ -351,12 +361,9 @@ def runDetectionTask():
     teensy.write('a0>'.encode('utf-8'))
     time.sleep(0.01)
 
-    csPlt.makeTrialFig(detectPlotNum)
-
     # Initialize some stuff
     tTeensyState=-1
     
-
     # Go ahead and check the state:
     tTeensyState=csSer.checkVariable(tTeensyState,teensy,'a',2,0.005)
     fb=0
@@ -371,6 +378,10 @@ def runDetectionTask():
     csSer.flushBuffer(teensy)
 
     # set up trial data handling.
+    sesVars['sessionOn']=1
+    sesVars['canQuit']=0
+    quitButton['text']="end ses"
+
     sesVars['maxDur']=7200
     sesVars['sampRate']=1000
     npSamps=sesVars['maxDur']*sesVars['sampRate']
@@ -380,15 +391,12 @@ def runDetectionTask():
     'lick1_Data','pythonState','thrLicksA','motion','contrast','orientation']
 
     # Temp Trial Variability
-    sessionOn=1
     trialVars['rewardDur']=250
 
     preTime=np.random.randint(200,5000)
     trialVars['trialDur']=preTime+trialVars['rewardDur']
-
-
-    # start pyState at 1
-
+    f=csSesHDF.makeHDF(sesVars['dirPath']+'/',\
+        sesVars['subjID'] + '_ses{}'.format(sesVars['curSession']),dStamp)
     pyState=1
     lickCo=0  
     lastLick=0
@@ -397,32 +405,31 @@ def runDetectionTask():
     tContrast=0
     tOrientation = 0
 
-    rwdHead=0
     sHeaders=np.array([0,0,0,0,0,0])
     sList=[0,1,2,3,4,5]
-    trialPltUpdate=1
     trialSamps=[0,0]
     sampLog=[]
-    # Send to 1, wait state.
-    teensy.write('a1>'.encode('utf-8'))  
+
     contrastList=[]
     orientationList=[]
     loopCnt=0
-    while sessionOn:
+    
+    # Send to 1, wait state.
+    teensy.write('a1>'.encode('utf-8')) 
+    while sesVars['sessionOn']:
+
         # 1) Look for data every loop
         [tString,dNew]=csSer.readSerialData(teensy,'tData',8)
         if dNew:
-            tInterrupt=int(tString[1])
-            tTrialTime=int(tString[2])
+            
             tStateTime=int(tString[3])
             tTeensyState=int(tString[4])
             tLick0=int(tString[5])
-            tLick1=int(tString[6])
-            tMotion=int(tString[7])
+            # tMotion=int(tString[7])
 
             tFrameCount=0  # Todo: frame counter in.
-            sesData[loopCnt,0]=int(tString[1])
-            sesData[loopCnt,1]=int(tString[2])
+            sesData[loopCnt,0]=int(tString[1]) #interrupt
+            sesData[loopCnt,1]=int(tString[2]) # trialtime
             sesData[loopCnt,2]=int(tString[3])
             sesData[loopCnt,3]=int(tString[4])
             sesData[loopCnt,4]=pyState
@@ -431,19 +438,25 @@ def runDetectionTask():
             sesData[loopCnt,7]=0
             sesData[loopCnt,8]=int(tString[7])
             loopCnt=loopCnt+1
-            if loopCnt>200 and np.mod(loopCnt,500)==0:
-                csPlt.updateTrialFig(np.arange(len(sesData[loopCnt-200:loopCnt,8])),sesData[loopCnt-200:loopCnt,8],sesVars['trialNum'],sesVars['totalTrials'])
+            
+            plotSamps=50
+            updateCount=500
+            chanPlot=5
+            if loopCnt>plotSamps and np.mod(loopCnt,updateCount)==0:
+                csPlt.updateTrialFig(np.arange(len(sesData[loopCnt-plotSamps:loopCnt,chanPlot])),\
+                    sesData[loopCnt-plotSamps:loopCnt,chanPlot],sesVars['trialNum'],sesVars['totalTrials'],tTeensyState)
 
 
             # this determines if we keep running
             sesVars['totalTrials']=int(totalTrials_TV.get())
             if sesVars['trialNum']>sesVars['totalTrials']:
-                sessionOn=0
+                sesVars['sessionOn']=0
 
             # look for licks
+            latchTime=20
             if tLick0>trialVars['lickAThr'] and trialVars['lickLatchA']==0:
                 sesData[-1,7]=1
-                trialVars['lickLatchA']=20
+                trialVars['lickLatchA']=latchTime
                 trialLicks=trialLicks+1
 
             elif tLick0<=trialVars['lickAThr'] or trialVars['lickLatchA']>0:
@@ -460,8 +473,6 @@ def runDetectionTask():
             if stateSync==0:
                 teensy.write('a{}>'.format(pyState).encode('utf-8'))  
 
-            
-            
             # 4) Now look at what state you are in and evaluate accordingly
             if pyState == 1 and stateSync==1:
                 
@@ -470,8 +481,7 @@ def runDetectionTask():
 
                     # reset counters that track state stuff.
                     lickCounter=0
-                    lastLick=0
-                    trialPltUpdate=1
+                    lastLick=0                    
 
                     # get contrast and orientation
                     tContrast=np.random.randint(0,11)
@@ -544,15 +554,12 @@ def runDetectionTask():
                     pyState=1
                     teensy.write('a1>'.encode('utf-8'))
                     print('last trial took: {} seconds'.format(sampLog[-1]/1000))
-                    print(sessionOn)
-                    # if trialPltUpdate:
-                    #     csPlt.updateTrialFig(sesData[trialSamps[0]:trialSamps[1],1]-sesData[trialSamps[0],1],\
-                    #         sesData[trialSamps[0]:trialSamps[1],8],sesVars['trialNum'],sesVars['totalTrials'])
-                    #     trialPltUpdate=0                           
+                         
     
     f["session_{}".format(sesVars['curSession'])]=sesData[0:loopCnt,:]
     f["session_{}".format(sesVars['curSession'])].attrs['contrasts']=contrastList
     f["session_{}".format(sesVars['curSession'])].attrs['orientations']=orientationList
+    f["session_{}".format(sesVars['curSession'])].attrs['trialDurs']=sampLog
     f.close()
 
 
@@ -561,7 +568,7 @@ def runDetectionTask():
     time.sleep(0.05)
     teensy.write('a0>'.encode('utf-8'))
 
-    print('finished {} detection trials'.format(sesVars['totalTrials']))
+    print('finished {} trials'.format(sesVars['trialNum']))
     sesVars['trialNum']=0
     sesVars_bindings=csVar.dictToPandas(sesVars)
     sesVars_bindings.to_csv(sesVars['dirPath'] + '/' +'sesVars.csv')
@@ -583,15 +590,24 @@ def runDetectionTask():
         aio.send('{}_topVol'.format(sesVars['subjID']),topAmount)
         
     teensy.close()
+    sesVars['canQuit']=1
+    quitButton['text']="quit"
 def closeup():
-
-    sesVars_bindings=csVar.dictToPandas(sesVars)
-    sesVars_bindings.to_csv(sesVars['dirPath'] + '/' +'sesVars.csv')
     try:
-        plt.close(detectPlotNum)
-        os._exit(1)
+        sesVars['sessionOn']=0
     except:
-        os._exit(1)
+        sesVars['canQuit']=1
+        quitButton['text']="quit"
+
+
+    if sesVars['canQuit']==1:
+        # try to close a plot and exit    
+        try:
+            plt.close(detectPlotNum)
+            os._exit(1)
+        # else exit
+        except:
+            os._exit(1)
 
 # Make the main window
 if makeBar==0:
@@ -621,7 +637,6 @@ if makeBar==0:
     comPath_teensy_entry=Entry(taskBar, width=24, textvariable=comPath_teensyTV)
     comPath_teensy_entry.grid(row=cpRw+1,column=0,padx=0,columnspan=2,sticky=W)
     
-
     beRW=4
     baudEntry_label = Label(taskBar,text="BAUD Rate:",justify=LEFT)
     baudEntry_label.grid(row=beRW, column=0,sticky=W)
@@ -640,7 +655,6 @@ if makeBar==0:
     subjID_entry.grid(row=sbRw,column=1,padx=0,sticky=W)
     
     
-    
     ttRw=8
     teL=Label(taskBar, text="total trials:",justify=LEFT)
     teL.grid(row=ttRw,column=0,padx=0,sticky=W)
@@ -651,13 +665,10 @@ if makeBar==0:
     
 
     btnRw=10
-    tb = Button(taskBar,text="shape: detection",width=c1Wd,command=runDetectionTask)
-    tb.grid(row=btnRw,column=0)
     tc = Button(taskBar,text="task: detection",width=c1Wd,command=runDetectionTask)
-    tc.grid(row=btnRw+1,column=0)
-    td = Button(taskBar,text="quit",width=c1Wd,command=closeup)
-    td.grid(row=btnRw+2,column=0)
-    
+    tc.grid(row=btnRw,column=0)
+    quitButton = Button(taskBar,text="quit",width=c1Wd,command=closeup)
+    quitButton.grid(row=btnRw+1,column=0)
     taskBar.pack(side=TOP, fill=X)
     
 
