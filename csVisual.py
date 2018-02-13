@@ -349,13 +349,29 @@ csPlt=csPlot(1)
 
 csPlt.makeTrialFig(100)
 
-# datestamp
+# datestamp/rig id/session variables
 cTime = datetime.datetime.now()
 dStamp=cTime.strftime("%m_%d_%Y")
-
 curMachine=csVar.getRig()
 sesVars=csVar.sesVarDict
 
+# prealloc random stuff (assume no more than 1k trials)
+maxTrials=1000
+randContrasts=np.random.randint(0,11,size=maxTrials)
+randOrientations=np.random.randint(0,37,size=maxTrials)
+randWaitTimePad=np.random.randint(200,7000,size=maxTrials)
+
+# ****************************
+# ***** trial data logging ***
+# ****************************
+#
+# pre-alloc lists for variables that only change across trials.
+
+contrastList=[]
+orientationList=[]
+lickThresholds=[]
+waitPad=[]
+trialType=[]
 
 def getPath():
     try:
@@ -379,10 +395,8 @@ def getPath():
             # we first try to see if it is numeric.
             try:
                 tType=float(varVal)
-                try:
+                if int(tType)==tType:
                     tType=int(tType)
-                except:
-                    g=1
                 # update any text variables that may exist.
                 try:
                     exec(varKey + '_TV.set({})'.format(tType))
@@ -400,16 +414,11 @@ def getPath():
         g=1
 def runDetectionTask():
     
-    detectPlotNum=100
-    # get total trials from the gui if available.
-    try:
-        sesVars['totalTrials']=int(totalTrials_TV.get())
-    except:
-        a=1
-      
+    # update the dict from gui, in case the user changed things.
+    csVar.updateDictFromGUI(sesVars) 
     trialVars=csVar.trialVars
-    
-    # Update MQTT Feeds
+
+    # update MQTT Feeds
     if sesVars['logMQTT']==1:
         aioHashPath=sesVars['hashPath'] + '/simpHashes/cdIO.txt'
         # aio is csAIO's mq broker object.
@@ -422,7 +431,7 @@ def runDetectionTask():
             sesVars['logMQTT']=0
             logMQTT_Toggle.deselect()
         [sesVars['waterConsumed'],hrDiff]=csAIO.getDailyConsumption(aio,sesVars['subjID'],sesVars['rigGMTZoneDif'],12)
-        print('already had {} ml'.format(sesVars['waterConsumed']))
+        print('{} already had {} ml'.format(sesVars['subjID'],sesVars['waterConsumed']))
         
 
 
@@ -484,8 +493,8 @@ def runDetectionTask():
     trialSamps=[0,0]
     sampLog=[]
     tc['state'] = 'disabled'
-    contrastList=[]
-    orientationList=[]
+
+
     loopCnt=0
     
     # Send to 1, wait state.
@@ -513,7 +522,7 @@ def runDetectionTask():
             sesData[loopCnt,8]=int(tString[7])
             loopCnt=loopCnt+1
             
-            plotSamps=50
+            plotSamps=20
             updateCount=500
             chanPlot=5
             if loopCnt>plotSamps and np.mod(loopCnt,updateCount)==0:
@@ -559,17 +568,23 @@ def runDetectionTask():
                     lastLick=0                    
 
                     # get contrast and orientation
-                    tContrast=np.random.randint(0,11)
-                    tOrientation=np.random.randint(0,37)
-                    preTime=np.random.randint(200,5000)
+                    # trials are 0 until incremented, so incrementing
+                    # trial after these picks ensures 0 indexing without -1.
+                    tContrast=randContrasts[sesVars['trialNum']]
+                    tOrientation=randContrasts[sesVars['trialNum']]
+                    preTime=randContrasts[sesVars['trialNum']]
                     contrastList.append(tContrast)
                     orientationList.append(tOrientation)
+                    waitPad.append(preTime)
+
+
                     teensy.write('c{}>'.format(tContrast).encode('utf-8'))
                     teensy.write('o{}>'.format(tOrientation).encode('utf-8'))
+                   
                     # update the trial
                     sesVars['trialNum']=sesVars['trialNum']+1
                     print('start trial #{}'.format(sesVars['trialNum']))
-                    print('contrast: {} orientation: {}'.format(tContrast,tOrientation))
+                    print('contrast: {} orientation: {}'.format(tContrast*0.1,tOrientation*10))
 
                     # close the header and flip the others open.
                     sHeaders[pyState]=1
@@ -635,6 +650,7 @@ def runDetectionTask():
     f["session_{}".format(sesVars['curSession'])]=sesData[0:loopCnt,:]
     f["session_{}".format(sesVars['curSession'])].attrs['contrasts']=contrastList
     f["session_{}".format(sesVars['curSession'])].attrs['orientations']=orientationList
+    f["session_{}".format(sesVars['curSession'])].attrs['waitTimePads']=waitPad
     f["session_{}".format(sesVars['curSession'])].attrs['trialDurs']=sampLog
     f.close()
 
@@ -644,7 +660,7 @@ def runDetectionTask():
     time.sleep(0.05)
     teensy.write('a0>'.encode('utf-8'))
 
-    print('finished {} trials'.format(sesVars['trialNum']))
+    print('finished {} trials'.format(sesVars['trialNum']-1))
     sesVars['trialNum']=0
     csVar.updateDictFromGUI(sesVars)
     sesVars_bindings=csVar.dictToPandas(sesVars)
@@ -728,7 +744,7 @@ if makeBar==0:
     baudPick.grid(row=beRW, column=1,sticky=W)
     baudPick.config(width=8)
 
-    sbRw=6
+    sbRw=5
     subjID_label=Label(taskBar, text="Subject ID:", justify=LEFT)
     subjID_label.grid(row=sbRw,column=0,padx=0,sticky=W)
     subjID_TV=StringVar(taskBar)
@@ -737,7 +753,7 @@ if makeBar==0:
     subjID_entry.grid(row=sbRw,column=1,padx=0,sticky=W)
     
     
-    ttRw=8
+    ttRw=6
     teL=Label(taskBar, text="Total Trials:",justify=LEFT)
     teL.grid(row=ttRw,column=0,padx=0,sticky=W)
     totalTrials_TV=StringVar(taskBar)
@@ -745,23 +761,48 @@ if makeBar==0:
     te = Entry(taskBar, text="Quit",width=10,textvariable=totalTrials_TV)
     te.grid(row=ttRw,column=1,padx=0,sticky=W)
 
-    btnRw=10
+
+
+    # MQTT Stuff
+
+    ttRw=7
+    blL=Label(taskBar, text=" ——————— ",justify=LEFT)
+    blL.grid(row=ttRw,column=0,padx=0,sticky=W)
+
+    btnRw=8
     logMQTT_SV=StringVar()
     logMQTT_Toggle=Checkbutton(taskBar,text="Log MQTT Info?",variable=sesVars['logMQTT'],onvalue=1,offvalue=0)
     logMQTT_Toggle.grid(row=btnRw,column=0)
     logMQTT_Toggle.select()
-    
 
-    btnRw=11
+    ttRw=9
+    hpL=Label(taskBar, text="Hash Path:",justify=LEFT)
+    hpL.grid(row=ttRw,column=0,padx=0,sticky=W)
+    hashPath_TV=StringVar(taskBar)
+    hashPath_TV.set(sesVars['hashPath'])
+    te = Entry(taskBar,width=10,textvariable=hashPath_TV)
+    te.grid(row=ttRw,column=1,padx=0,sticky=W)
+
+    ttRw=10
+    vpR=Label(taskBar, text="Vol/Rwd (~):",justify=LEFT)
+    vpR.grid(row=ttRw,column=0,padx=0,sticky=W)
+    volPerRwd_TV=StringVar(taskBar)
+    volPerRwd_TV.set(sesVars['volPerRwd'])
+    te = Entry(taskBar,width=10,textvariable=volPerRwd_TV)
+    te.grid(row=ttRw,column=1,padx=0,sticky=W)
+    
+    # Main Buttons
+    ttRw=11
+    blL=Label(taskBar, text=" ——————— ",justify=LEFT)
+    blL.grid(row=ttRw,column=0,padx=0,sticky=W)
+
+    btnRw=12
     tc = Button(taskBar,text="Task: Detection",width=c1Wd,command=runDetectionTask)
     tc.grid(row=btnRw,column=0)
     tc['state'] = 'disabled'
     quitButton = Button(taskBar,text="Quit",width=c1Wd,command=closeup)
     quitButton.grid(row=btnRw+1,column=0)
     taskBar.pack(side=TOP, fill=X)
-
-    
-    
 
     makeBar=1
 
