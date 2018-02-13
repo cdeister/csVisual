@@ -356,8 +356,8 @@ curMachine=csVar.getRig()
 sesVars=csVar.sesVarDict
 
 contrastChange=1
-orientationChange=1
-spatialChange=0
+orientationChange=0
+spatialChange=1
 
 
 
@@ -453,9 +453,9 @@ def runDetectionTask():
     elif orientationChange==0:
         defaultOrientation=0
         randOrientations=defaultOrientation*np.ones(maxTrials)
-        teensy.write('o{}>'.format(defaultContrast).encode('utf-8'))
+        teensy.write('o{}>'.format(defaultOrientation).encode('utf-8'))
     if spatialChange:
-        randSpatials=np.random.randint(1,6,size=maxTrials)
+        randSpatials=np.random.randint(10,30,size=maxTrials)
     elif spatialChange==0:
         defaultSpatial=4
         randSpatials=defaultSpatial*np.ones(maxTrials)
@@ -597,7 +597,7 @@ def runDetectionTask():
                     tContrast=randContrasts[sesVars['trialNum']]
                     tOrientation=randContrasts[sesVars['trialNum']]
                     tSpatial=randSpatials[sesVars['trialNum']]
-                    preTime=randContrasts[sesVars['trialNum']]
+                    preTime=randWaitTimePad[sesVars['trialNum']]
                     contrastList.append(tContrast)
                     orientationList.append(tOrientation)
                     spatialFreqs.append(tSpatial)
