@@ -355,11 +355,11 @@ dStamp=cTime.strftime("%m_%d_%Y")
 curMachine=csVar.getRig()
 sesVars=csVar.sesVarDict
 
-# prealloc random stuff (assume no more than 1k trials)
-maxTrials=1000
-randContrasts=np.random.randint(0,11,size=maxTrials)
-randOrientations=np.random.randint(0,37,size=maxTrials)
-randWaitTimePad=np.random.randint(200,7000,size=maxTrials)
+contrastChange=1
+orientationChange=1
+spatialChange=0
+
+
 
 # ****************************
 # ***** trial data logging ***
@@ -369,6 +369,7 @@ randWaitTimePad=np.random.randint(200,7000,size=maxTrials)
 
 contrastList=[]
 orientationList=[]
+spatialFreqs=[]
 lickThresholds=[]
 waitPad=[]
 trialType=[]
@@ -438,6 +439,29 @@ def runDetectionTask():
     # Make a teensy object by connecting to the main teensy.
     sesVars['comPath_teensy']=comPath_teensy_TV.get()
     teensy=csSer.connectComObj(sesVars['comPath_teensy'],sesVars['baudRate_teensy'])
+
+    # prealloc random stuff (assume no more than 1k trials)
+    maxTrials=1000
+    if contrastChange:
+        randContrasts=np.random.randint(0,11,size=maxTrials)
+    elif contrastChange==0:
+        defaultContrast=10
+        randContrasts=defaultContrast*np.ones(maxTrials)
+        teensy.write('c{}>'.format(defaultContrast).encode('utf-8'))
+    if orientationChange:
+        randOrientations=np.random.randint(0,37,size=maxTrials)
+    elif orientationChange==0:
+        defaultOrientation=0
+        randOrientations=defaultOrientation*np.ones(maxTrials)
+        teensy.write('o{}>'.format(defaultContrast).encode('utf-8'))
+    if spatialChange:
+        randSpatials=np.random.randint(1,6,size=maxTrials)
+    elif spatialChange==0:
+        defaultSpatial=4
+        randSpatials=defaultSpatial*np.ones(maxTrials)
+        teensy.write('s{}>'.format(defaultSpatial).encode('utf-8'))
+
+    randWaitTimePad=np.random.randint(200,7000,size=maxTrials)
 
     # Send teensy to state 0 and flush the buffer.
     csSer.flushBuffer(teensy)
@@ -572,19 +596,24 @@ def runDetectionTask():
                     # trial after these picks ensures 0 indexing without -1.
                     tContrast=randContrasts[sesVars['trialNum']]
                     tOrientation=randContrasts[sesVars['trialNum']]
+                    tSpatial=randSpatials[sesVars['trialNum']]
                     preTime=randContrasts[sesVars['trialNum']]
                     contrastList.append(tContrast)
                     orientationList.append(tOrientation)
+                    spatialFreqs.append(tSpatial)
                     waitPad.append(preTime)
 
-
-                    teensy.write('c{}>'.format(tContrast).encode('utf-8'))
-                    teensy.write('o{}>'.format(tOrientation).encode('utf-8'))
+                    if contrastChange:
+                        teensy.write('c{}>'.format(tContrast).encode('utf-8'))
+                    if orientationChange:
+                        teensy.write('o{}>'.format(tOrientation).encode('utf-8'))
+                    if spatialChange:
+                        teensy.write('s{}>'.format(tSpatial).encode('utf-8'))
                    
                     # update the trial
                     sesVars['trialNum']=sesVars['trialNum']+1
                     print('start trial #{}'.format(sesVars['trialNum']))
-                    print('contrast: {} orientation: {}'.format(tContrast*0.1,tOrientation*10))
+                    print('contrast: {:0.2f} orientation: {}'.format(tContrast*0.1,tOrientation*10))
 
                     # close the header and flip the others open.
                     sHeaders[pyState]=1
@@ -602,7 +631,6 @@ def runDetectionTask():
                     pyState=2
                     # we ask teensy to go to new state.
                     teensy.write('a2>'.encode('utf-8'))
-
             if pyState == 2 and stateSync==1:
                 if sHeaders[pyState]==0:
                     csPlt.updateStateFig(pyState)
@@ -629,7 +657,6 @@ def runDetectionTask():
                         stateSync=0
                         pyState=4
                         teensy.write('a4>'.encode('utf-8'))
-        
             if pyState == 4 and stateSync==1:
                 if sHeaders[pyState]==0:
                     csPlt.updateStateFig(pyState)
@@ -650,6 +677,7 @@ def runDetectionTask():
     f["session_{}".format(sesVars['curSession'])]=sesData[0:loopCnt,:]
     f["session_{}".format(sesVars['curSession'])].attrs['contrasts']=contrastList
     f["session_{}".format(sesVars['curSession'])].attrs['orientations']=orientationList
+    f["session_{}".format(sesVars['curSession'])].attrs['spatialFreqs']=spatialFreqs
     f["session_{}".format(sesVars['curSession'])].attrs['waitTimePads']=waitPad
     f["session_{}".format(sesVars['curSession'])].attrs['trialDurs']=sampLog
     f.close()
