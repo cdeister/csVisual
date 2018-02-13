@@ -39,7 +39,11 @@ rsDataDF(find(isnan(rsDataDF)==1))=0;
 % you would need to zoom in a lot to see the difference, so as a sanity
 % check i make the rs data red and wide so you can see them together.
 figure,plot(bData.sessionTime',rsDataDF(:,1),'r-','linewidth',5)
+<<<<<<< HEAD
 hold all,plot(absTime,somaticF_DF(1,:),'k-','linewidth',2)
+=======
+hold all,plot(ci05_ccdMap_001_absTime,somaticF_DF(1,:),'k-','linewidth',2)
+>>>>>>> 37fc4d30e99f28d29f007823e93853655024b7a4
 
 
 %% Crude regression, to make the point ... 
@@ -69,9 +73,14 @@ clear cR
 % example shows 500 ms pre and 2 sec post trigger ...
 preSamps=500;
 postSamps=2000;
+[stimOnSamps,stimOnBinary]=getStateSamps(bData.states,2,1);
 trigTimeVect=[-500:2000];
+<<<<<<< HEAD
 [stimOnSamps,stimOnVect]=getStateSamps(bData.states,2,1);
 roiNum=2;
+=======
+roiNum=1;
+>>>>>>> 37fc4d30e99f28d29f007823e93853655024b7a4
 trigSamps=preSamps+postSamps+1;
 trigDF = vertcat(rsDataDF(:,roiNum),NaN(trigSamps,1));
 stimTrigs=zeros(trigSamps,numel(bData.curContrasts));
@@ -84,14 +93,22 @@ cR=figure(roiNum);
 cR.Position=[560 528 1380 420];
 subplot(2,4,1)
 plot(trigTimeVect,stimTrigs,'k-','linewidth',0.5)
+<<<<<<< HEAD
 hold all,plot([0 0],[-0.01 0.1],'b:','linewidth',2)
+=======
+hold all,plot([0 0],[-0.01 0.2],'b:','linewidth',2)
+>>>>>>> 37fc4d30e99f28d29f007823e93853655024b7a4
 hold all,plot(trigTimeVect,mean(stimTrigs,2),'r-','linewidth',1)
 xlim([-500,2000])
 xlabel('Time (ms)');
 ylabel('dF/F')'
 subplot(2,4,5)
 boundedline(trigTimeVect,nanmean(stimTrigs,2),standardError(stimTrigs,2),'cmap',[0,0,0])
+<<<<<<< HEAD
 hold all,plot([0 0],[-0.01 0.04],'r:','linewidth',2)
+=======
+hold all,plot([0 0],[-0.01 0.2],'r:','linewidth',2)
+>>>>>>> 37fc4d30e99f28d29f007823e93853655024b7a4
 xlim([-500,2000])
 xlabel('Time (ms)');
 ylabel('dF/F')'
