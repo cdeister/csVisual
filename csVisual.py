@@ -76,6 +76,20 @@ class csVariables(object):
                 varIt=varIt+1
         
         return curDict
+    def updateDictFromGUI(self,dictName):
+        for key in list(dictName.keys()):
+            try:
+                a=eval('{}_TV.get()'.format(key))                
+                try:
+                    a=float(a)
+                    if a.is_integer():
+                        a=int(a)
+                    exec('dictName["{}"]={}'.format(key,a))
+                except:
+                    exec('dictName["{}"]="{}"'.format(key,a))
+            except:
+                g=1
+
 class csHDF(object):
 
     def __init__(self,a):
@@ -286,7 +300,6 @@ curMachine=csVar.getRig()
 sesVars=csVar.sesVarDict
 
 
-
 def getPath():
     try:
         selectPath = fd.askdirectory(title ="what what?")
@@ -312,18 +325,21 @@ def getPath():
                     tType=int(tType)
                 except:
                     g=1
+                # update any text variables that may exist.
+                try:
+                    exec(varKey + '_TV.set({})'.format(tType))
+                except:
+                    g=1
             except:
                 tType=varVal
+                # update any text variables that may exist.
+                try:
+                    exec(varKey + '_TV.set("{}")'.format(tType))
+                except:
+                    g=1
             sesVars[varKey]=tType
-            # update any text variables that may exist.
-            try:
-                exec(varKey + '_TV.set({})'.format(tType))
-            except:
-                g=1
     except:
         g=1
-
-
 def runDetectionTask():
     
     detectPlotNum=100
@@ -353,7 +369,7 @@ def runDetectionTask():
 
 
     # Make a teensy object by connecting to the main teensy.
-    sesVars['comPath_teensy']=comPath_teensyTV.get()
+    sesVars['comPath_teensy']=comPath_teensy_TV.get()
     teensy=csSer.connectComObj(sesVars['comPath_teensy'],sesVars['baudRate_teensy'])
 
     # Send teensy to state 0 and flush the buffer.
@@ -570,6 +586,7 @@ def runDetectionTask():
 
     print('finished {} trials'.format(sesVars['trialNum']))
     sesVars['trialNum']=0
+    csVar.updateDictFromGUI(sesVars)
     sesVars_bindings=csVar.dictToPandas(sesVars)
     sesVars_bindings.to_csv(sesVars['dirPath'] + '/' +'sesVars.csv')
 
@@ -593,6 +610,13 @@ def runDetectionTask():
     sesVars['canQuit']=1
     quitButton['text']="quit"
 def closeup():
+    csVar.updateDictFromGUI(sesVars)
+    try:
+        sesVars_bindings=csVar.dictToPandas(sesVars)
+        sesVars_bindings.to_csv(sesVars['dirPath'] + '/' +'sesVars.csv')
+    except:
+        g=1
+
     try:
         sesVars['sessionOn']=0
     except:
@@ -632,9 +656,9 @@ if makeBar==0:
     cpRw=2
     comPath_teensy_label=Label(taskBar, text="COM (Teensy) path:", justify=LEFT)
     comPath_teensy_label.grid(row=cpRw,column=0,padx=0,sticky=W)
-    comPath_teensyTV=StringVar(taskBar)
-    comPath_teensyTV.set(sesVars['comPath_teensy'])
-    comPath_teensy_entry=Entry(taskBar, width=24, textvariable=comPath_teensyTV)
+    comPath_teensy_TV=StringVar(taskBar)
+    comPath_teensy_TV.set(sesVars['comPath_teensy'])
+    comPath_teensy_entry=Entry(taskBar, width=24, textvariable=comPath_teensy_TV)
     comPath_teensy_entry.grid(row=cpRw+1,column=0,padx=0,columnspan=2,sticky=W)
     
     beRW=4
