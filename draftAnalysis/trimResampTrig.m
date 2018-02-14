@@ -1,7 +1,7 @@
 %%Specify animal absTime and images_registered
 
-absTime = ccdMap_ci03_001_absTime;
-images_registered = ccdMap_ci03_001_images_registered;
+absTime = ci02_ccdMap_13Feb2018_003_absTime;
+images_registered = frameAvg_ci02_ccdMap_13Feb2018_003_images;
 
 %% Trim (make images and image time, just short of the behavior time).
 imEnd=absTime(end);
@@ -25,13 +25,13 @@ end
 %% trim somaticF if you have it. 
 try
     somaticF=somaticF(:,1:imTrim);
-    somaticF_DF=somaticF_DF(:,1:imTrim);
+    %somaticF_DF=somaticF_DF(:,1:imTrim);
 catch
 end
 
 %% Resample df to behavior time.
 %rsData=rsCaData(somaticF',ci05_ccdMap_001_absTime',bData.sessionTime);
-rsDataDF=rsCaData(somaticF_DF',absTime',bData.sessionTime);
+rsDataDF=rsCaData(somaticF',absTime',bData.sessionTime);
 % sometime rs pads with nans on the ends.
 rsDataDF(find(isnan(rsDataDF)==1))=0;
 %% FYI: how did we do? 
@@ -39,7 +39,7 @@ rsDataDF(find(isnan(rsDataDF)==1))=0;
 % you would need to zoom in a lot to see the difference, so as a sanity
 % check i make the rs data red and wide so you can see them together.
 figure,plot(bData.sessionTime',rsDataDF(:,1),'r-','linewidth',5)
-hold all,plot(absTime,somaticF_DF(1,:),'k-','linewidth',2)
+hold all,plot(absTime,somaticF(1,:),'k-','linewidth',2)
 
 
 %% Crude regression, to make the point ... 
@@ -66,16 +66,17 @@ hold all,plot(normVel)
 %% quick stim trigger (example).
 % this can and should be vectorized for long term use ... 
 clear cR
+roiNum=1;
 % example shows 500 ms pre and 2 sec post trigger ...
 preSamps=500;
 postSamps=2000;
 trigTimeVect=[-500:2000];
 [stimOnSamps,stimOnVect]=getStateSamps(bData.states,2,1);
-roiNum=2;
+
 trigSamps=preSamps+postSamps+1;
 trigDF = vertcat(rsDataDF(:,roiNum),NaN(trigSamps,1));
 stimTrigs=zeros(trigSamps,numel(bData.curContrasts));
-for n=1:numel(bData.curContrasts)
+for n=1:numel(bData.curContrasts(1:400))
     stimTrigs(:,n)=trigDF(stimOnSamps(n)-preSamps:stimOnSamps(n)+postSamps);
 end
 
@@ -88,14 +89,14 @@ hold all,plot([0 0],[-0.01 0.1],'b:','linewidth',2)
 hold all,plot(trigTimeVect,mean(stimTrigs,2),'r-','linewidth',1)
 xlim([-500,2000])
 xlabel('Time (ms)');
-ylabel('dF/F')'
+ylabel('dF/F')
 subplot(2,4,5)
 boundedline(trigTimeVect,nanmean(stimTrigs,2),standardError(stimTrigs,2),'cmap',[0,0,0])
 hold all,plot([0 0],[-0.01 0.1],'r:','linewidth',2)
 xlim([-500,2000])
 xlabel('Time (ms)');
-ylabel('dF/F')'
-%% now contrast ...
+ylabel('dF/F')
+% now contrast ...
 
 % compare extremes to middle ... 
 zeroContrasts=stimTrigs(:,find(bData.curContrasts==0));
