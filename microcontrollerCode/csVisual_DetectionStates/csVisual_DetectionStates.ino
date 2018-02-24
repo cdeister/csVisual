@@ -14,15 +14,15 @@ uint32_t trialTime;
 uint32_t stateTime;
 
 
-int lickSensorL = 0;
+int forceSensor = 0;
 int lickSensorR = 0;
 int motionSensor = 0;
 
 
-const int lickPinL = 18;
+const int forceSensorPin = 20;
 const int lickPinR = 21;
 const int motionPin = 23;
-const int rewardPinA = 13;   // 35 is better, 13 is LED so good for debug.
+const int rewardPinA = 35;   // 35 is better, 13 is LED so good for debug.
 
 int rewardDelivTypeA = 0; // 0 is solenoid; 1 is syringe pump
 int rewardDelivTypeB = 0;
@@ -32,7 +32,7 @@ bool rewarding = 0;
 
 // knownLabels[]={'tState','rewardTime','timeOut','contrast','orientation','sFreq','tFreq','visVariableUpdateBlock'};
 char knownHeaders[] = {'a', 'r', 't', 'c', 'o', 's', 'f', 'v'};
-int knownValues[] = {0, 200, 4000, 0, 0, 0, 0, 1};
+int knownValues[] = {0, 500, 4000, 0, 0, 0, 0, 1};
 int knownCount = 7;
 
 int headerStates[] = {0, 0, 0, 0, 0, 0};
@@ -192,7 +192,7 @@ void dataReport() {
   Serial.print(',');
   Serial.print(tState);
   Serial.print(',');
-  Serial.print(lickSensorL);
+  Serial.print(forceSensor);
   Serial.print(',');
   Serial.print(lickSensorR);
   Serial.print(',');
@@ -269,7 +269,6 @@ void resetHeaders() {
 
 void pollLickSensors() {
   lickSensorR = analogRead(lickPinR);
-  lickSensorL = analogRead(lickPinL);
 }
 
 void genericHeader(int stateNum) {
@@ -282,6 +281,7 @@ void genericStateBody() {
   stateTime = millis() - stateTimeOffs;
   pollLickSensors();
   motionSensor = analogRead(motionPin);
+  forceSensor = analogRead(forceSensorPin);
 }
 
 void visStimOff() {

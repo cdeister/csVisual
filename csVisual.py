@@ -32,7 +32,7 @@ class csVariables(object):
         'subjID':'an1','taskType':'detect','totalTrials':10,'logMQTT':1,'mqttUpDel':0.05,\
         'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,'waterConsumed':0,'consumpTarg':1.5,\
         'dirPath':'/Users/Deister/BData','hashPath':'/Users/cad','trialNum':0,'sessionOn':1,'canQuit':1,\
-        'contrastChange':1,'orientationChange':1,'spatialChange':0,'dStreams':9,'rewardDur':500,'lickAThr':5000,\
+        'contrastChange':0,'orientationChange':1,'spatialChange':0,'dStreams':9,'rewardDur':500,'lickAThr':600,\
         'lickLatchA':0,'minNoLickTime':1000}
 
         self.stimVars={'contrast':1,'sFreq':4,'orientation':0}
@@ -485,7 +485,7 @@ def runDetectionTask():
     # Set maxDur to be two hours.
     sesVars['maxDur']=60*60*sesVars['sampRate']*2
     # Determine the max samples. We preallocate a numpy array to this depth.
-    npSamps=sesVars['maxDur']*sesVars['sampRate']
+    npSamps=sesVars['maxDur']
     sesData=np.zeros([npSamps,sesVars['dStreams']])
     dStreamLables=['interrupt','trialTime','stateTime','teensyState','lick0_Data',\
     'lick1_Data','pythonState','thrLicksA','motion','contrast','orientation']
@@ -508,6 +508,7 @@ def runDetectionTask():
 
     loopCnt=0
     sesVars['trialNum']=0
+    sesVars['lickLatchA']=0
 
     # Send to 1, wait state.
     teensy.write('a1>'.encode('utf-8')) 
@@ -524,7 +525,7 @@ def runDetectionTask():
         if dNew:
             tStateTime=int(tString[3])
             tTeensyState=int(tString[4])
-            tLick0=int(tString[5])
+    
 
             tFrameCount=0  # Todo: frame counter in.
             for x in range(0,sesVars['dStreams']-2):
@@ -548,15 +549,15 @@ def runDetectionTask():
 
             # look for licks
             latchTime=20
-            if tLick0>sesVars['lickAThr'] and sesVars['lickLatchA']==0:
-                sesData[-1,8]=1
+            if sesData[loopCnt-1,5]>=sesVars['lickAThr'] and sesVars['lickLatchA']==0:
+                sesData[loopCnt-1,8]=1
                 sesVars['lickLatchA']=latchTime
                 trialLicks=trialLicks+1
                 # these are used in states
                 lickCounter=lickCounter+1
                 lastLick=tStateTime
 
-            elif tLick0<=sesVars['lickAThr'] or sesVars['lickLatchA']>0:
+            elif sesVars['lickLatchA']>0:
                 sesVars['lickLatchA']=sesVars['lickLatchA']-1
 
             # 2) Does pyState match tState?
