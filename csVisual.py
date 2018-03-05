@@ -537,7 +537,7 @@ def runDetectionTask():
             # Plot updates.
             plotSamps=20
             updateCount=500
-            chanPlot=5
+            chanPlot=6
             if loopCnt>plotSamps and np.mod(loopCnt,updateCount)==0:
                 csPlt.updateTrialFig(np.arange(len(sesData[loopCnt-plotSamps:loopCnt,chanPlot])),\
                     sesData[loopCnt-plotSamps:loopCnt,chanPlot],sesVars['trialNum'],sesVars['totalTrials'],tTeensyState)
