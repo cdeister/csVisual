@@ -17,10 +17,12 @@ uint32_t stateTime;
 int forceSensor = 0;
 int lickSensorR = 0;
 int motionSensor = 0;
+int scopeState =0;
 
 
 const int forceSensorPin = 20;
 const int lickPinR = 21;
+const int scopePin = 24;
 const int motionPin = 23;
 const int rewardPinA = 35;   // 35 is better, 13 is LED so good for debug.
 
@@ -48,6 +50,7 @@ bool trigStuff = 0;
 void setup() {
   pinMode(syncPin, OUTPUT);
   digitalWrite(syncPin, LOW);
+  pinMode(scopePin,INPUT);
 
   pinMode(rewardPinA, OUTPUT);
   digitalWrite(rewardPinA, LOW);
@@ -196,7 +199,9 @@ void dataReport() {
   Serial.print(',');
   Serial.print(lickSensorR);
   Serial.print(',');
-  Serial.println(motionSensor);
+  Serial.print(motionSensor);
+  Serial.print(',');
+  Serial.println(scopeState);
 }
 
 
@@ -282,6 +287,7 @@ void genericStateBody() {
   pollLickSensors();
   motionSensor = analogRead(motionPin);
   forceSensor = analogRead(forceSensorPin);
+  scopeState=digitalRead(scopePin);
 }
 
 void visStimOff() {

@@ -32,7 +32,7 @@ class csVariables(object):
         'subjID':'an1','taskType':'detect','totalTrials':10,'logMQTT':1,'mqttUpDel':0.05,\
         'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,'waterConsumed':0,'consumpTarg':1.5,\
         'dirPath':'/Users/Deister/BData','hashPath':'/Users/cad','trialNum':0,'sessionOn':1,'canQuit':1,\
-        'contrastChange':0,'orientationChange':1,'spatialChange':0,'dStreams':9,'rewardDur':500,'lickAThr':600,\
+        'contrastChange':0,'orientationChange':1,'spatialChange':0,'dStreams':10,'rewardDur':500,'lickAThr':600,\
         'lickLatchA':0,'minNoLickTime':1000}
 
         self.stimVars={'contrast':1,'sFreq':4,'orientation':0}
@@ -248,7 +248,7 @@ class csPlot(object):
         
         # add the lickA axes and lines.
         lA_YMin=0
-        lA_YMax=2000
+        lA_YMax=6
         self.lA_Axes=self.trialFig.add_subplot(2,2,1) #col,rows
         self.lA_Axes.set_ylim([lA_YMin,lA_YMax])
         self.lA_Axes.set_xticks([])
@@ -434,8 +434,10 @@ def runDetectionTask():
         defaultContrast=10
         randContrasts=defaultContrast*np.ones(maxTrials)
         teensy.write('c{}>'.format(defaultContrast).encode('utf-8'))
+    sesVars['orientationChange']=1
     if sesVars['orientationChange']:
-        randOrientations=np.random.randint(0,37,size=maxTrials)
+        orientList=np.array([0,45,90,120,180,225,270,315])
+        randOrientations=orientList[np.random.randint(0,8,size=maxTrials)]
     elif sesVars['orientationChange']==0:
         defaultOrientation=0
         randOrientations=defaultOrientation*np.ones(maxTrials)
@@ -443,12 +445,14 @@ def runDetectionTask():
     randSpatialContinuous=0
     if sesVars['spatialChange']:
         if randSpatialContinuous:
-            randSpatials=np.random.randint(10,30,size=maxTrials)
+            spatialList=np.array([1,4,8,12])
+            randSpatials=spatialList[np.random.randint(0,5,size=maxTrials)]
+
         elif randSpatialContinuous==0:
             randSpatials=np.random.randint(1,4,size=maxTrials)
             randSpatials=randSpatials*10
     elif sesVars['spatialChange']==0:
-        defaultSpatial=20
+        defaultSpatial=1
         randSpatials=defaultSpatial*np.ones(maxTrials)
         teensy.write('s{}>'.format(defaultSpatial).encode('utf-8'))
 
@@ -521,7 +525,7 @@ def runDetectionTask():
 
         
         # 1) Look for data every loop
-        [tString,dNew]=csSer.readSerialData(teensy,'tData',8)
+        [tString,dNew]=csSer.readSerialData(teensy,'tData',9)
         if dNew:
             tStateTime=int(tString[3])
             tTeensyState=int(tString[4])
@@ -531,7 +535,7 @@ def runDetectionTask():
             for x in range(0,sesVars['dStreams']-2):
                 sesData[loopCnt,x]=int(tString[x+1])
             sesData[loopCnt,7]=pyState # The state python wants to be.
-            sesData[loopCnt,8]=0 # Thresholded licks
+            sesData[loopCnt,9]=0 # Thresholded licks
             loopCnt=loopCnt+1
             
             # Plot updates.
@@ -550,7 +554,7 @@ def runDetectionTask():
             # look for licks
             latchTime=20
             if sesData[loopCnt-1,5]>=sesVars['lickAThr'] and sesVars['lickLatchA']==0:
-                sesData[loopCnt-1,8]=1
+                sesData[loopCnt-1,9]=1
                 sesVars['lickLatchA']=latchTime
                 trialLicks=trialLicks+1
                 # these are used in states
@@ -588,7 +592,7 @@ def runDetectionTask():
                     # trials are 0 until incremented, so incrementing
                     # trial after these picks ensures 0 indexing without -1.
                     tContrast=randContrasts[sesVars['trialNum']]
-                    tOrientation=randContrasts[sesVars['trialNum']]
+                    tOrientation=randOrientations[sesVars['trialNum']]
                     tSpatial=randSpatials[sesVars['trialNum']]
                     preTime=randWaitTimePad[sesVars['trialNum']]
 
@@ -604,7 +608,7 @@ def runDetectionTask():
                    
                     # update the trial
                     print('start trial #{}'.format(sesVars['trialNum']))
-                    print('contrast: {:0.2f} orientation: {}'.format(tContrast*0.1,tOrientation*10))
+                    print('contrast: {:0.2f} orientation: {}'.format(tContrast,tOrientation))
 
                     # close the header and flip the others open.
                     sHeaders[pyState]=1
@@ -624,7 +628,7 @@ def runDetectionTask():
                     reported=0
                     lickCounter=0
                     lastLick=0
-                    minStimTime=1000
+                    minStimTime=2500
                     sHeaders[pyState]=1
                     sHeaders[np.setdiff1d(sList,pyState)]=0
  
