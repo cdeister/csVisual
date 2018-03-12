@@ -17,7 +17,7 @@ uint32_t stateTime;
 int forceSensor = 0;
 int lickSensorR = 0;
 int motionSensor = 0;
-int scopeState =0;
+bool scopeState =1;
 
 
 const int forceSensorPin = 20;

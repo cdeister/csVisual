@@ -247,8 +247,8 @@ class csPlot(object):
         self.trialFig.canvas.flush_events()
         
         # add the lickA axes and lines.
-        lA_YMin=0
-        lA_YMax=6
+        lA_YMin=-100
+        lA_YMax=5000
         self.lA_Axes=self.trialFig.add_subplot(2,2,1) #col,rows
         self.lA_Axes.set_ylim([lA_YMin,lA_YMax])
         self.lA_Axes.set_xticks([])
@@ -534,14 +534,14 @@ def runDetectionTask():
             tFrameCount=0  # Todo: frame counter in.
             for x in range(0,sesVars['dStreams']-2):
                 sesData[loopCnt,x]=int(tString[x+1])
-            sesData[loopCnt,7]=pyState # The state python wants to be.
+            sesData[loopCnt,8]=pyState # The state python wants to be.
             sesData[loopCnt,9]=0 # Thresholded licks
             loopCnt=loopCnt+1
             
             # Plot updates.
-            plotSamps=20
+            plotSamps=200
             updateCount=500
-            chanPlot=6
+            chanPlot=7
             if loopCnt>plotSamps and np.mod(loopCnt,updateCount)==0:
                 csPlt.updateTrialFig(np.arange(len(sesData[loopCnt-plotSamps:loopCnt,chanPlot])),\
                     sesData[loopCnt-plotSamps:loopCnt,chanPlot],sesVars['trialNum'],sesVars['totalTrials'],tTeensyState)
