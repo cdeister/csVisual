@@ -48,6 +48,7 @@ unsigned int trigTime = 10;
 bool trigStuff = 0;
 
 void setup() {
+
   pinMode(syncPin, OUTPUT);
   digitalWrite(syncPin, LOW);
   pinMode(scopePin,INPUT);
@@ -114,6 +115,7 @@ void vStates() {
     // **************************
     if (tState == 1) {
       if (headerStates[1] == 0) {
+        visStimOff();
         genericHeader(1);
       }
       genericStateBody();
