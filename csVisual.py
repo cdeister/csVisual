@@ -294,6 +294,19 @@ class csPlot(object):
         self.stAxes.draw_artist(self.curStLine)
         self.stAxes.draw_artist(self.stAxes.patch)
 
+        self.outcomeAxis=self.trialFig.add_subplot(2,2,3) #col,rows
+        self.outcomeLine,=self.outcomeAxis.plot([],[],marker="o",markeredgecolor="black",\
+            markerfacecolor="cornflowerblue",markersize=12,lw=0,alpha=0.5,markeredgewidth=2)
+        self.outcomeAxis.axis([-2,100,-0.2,1.2])
+        self.outcomeAxis.yaxis.tick_left()
+        self.outcomeAxis.set_title('Correct RR: {} , FR: {}'.format(0,0),fontsize=10)
+
+        # cache once 
+        plt.show(block=False)
+        self.trialFig.canvas.flush_events()
+        self.outcomeAxis.draw_artist(self.outcomeLine)
+        self.outcomeAxis.draw_artist(self.outcomeAxis.patch)
+
 
 
 
@@ -331,6 +344,14 @@ class csPlot(object):
 
         except:
              a=1
+
+    def updateOutcome(self,trialNum,responseVector,totalTrials):
+        xData=[1,2,3,4]
+        self.curStLine.set_xdata(xData)
+        self.curStLine.set_ydata(responseVector)
+        self.outcomeAxis.set_xlim([-1,totalTrials+1])
+        self.outcomeAxis.draw_artist(self.curStLine)
+        self.outcomeAxis.draw_artist(self.outcomeAxis.patch)
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 # $$$$$$$$$$$$$ Main Program Body $$$$$$$$$$$$$$$$
@@ -590,6 +611,7 @@ def runDetectionTask():
                     
                     if sHeaders[pyState]==0:
                         sesVars['trialNum']=sesVars['trialNum']+1
+                        csPlt.updateOutcome(4,[1,0,1,0],100)
 
                         csPlt.updateStateFig(1)
                         trialSamps[0]=loopCnt-1
