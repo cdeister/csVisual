@@ -2,7 +2,6 @@
 # 
 # Chris Deister - cdeister@brown.edu
 # Anything that is licenseable is governed by a MIT License found in the github directory. 
-# Get smart by making and sharing.
 
 
 from tkinter import *
@@ -33,7 +32,7 @@ class csVariables(object):
         'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,'waterConsumed':0,'consumpTarg':1.5,\
         'dirPath':'/Users/Deister/BData','hashPath':'/Users/cad','trialNum':0,'sessionOn':1,'canQuit':1,\
         'contrastChange':0,'orientationChange':1,'spatialChange':1,'dStreams':10,'rewardDur':500,'lickAThr':900,\
-        'lickLatchA':0,'minNoLickTime':1000,'toTime':4000,'shapingTrial':1,'chanPlot':5}
+        'lickLatchA':0,'minNoLickTime':1000,'toTime':4000,'shapingTrial':1,'chanPlot':5,'minStimTime':1500}
 
         self.stimVars={'contrast':1,'sFreq':4,'orientation':0}
 
@@ -93,8 +92,13 @@ class csHDF(object):
         self.a=1
     
     def makeHDF(self,basePath,subID,dateStamp):
-
-        self.sesHDF = h5py.File(basePath+"{}_behav_{}.hdf".format(subID,dateStamp), "a")
+        fe=os.path.isfile(basePath+"{}_behav_{}.hdf".format(subID,dateStamp))
+        if fe:
+            print('dupe hdf')
+            os.path.isfile(basePath+"{}_behav_{}.hdf".format(subID,dateStamp))
+            self.sesHDF = h5py.File(basePath+"{}_behav_{}_dup.hdf".format(subID,dateStamp), "a")
+        elif fe==0:
+            self.sesHDF = h5py.File(basePath+"{}_behav_{}.hdf".format(subID,dateStamp), "a")
         return self.sesHDF
 class csMQTT(object):
     def __init__(self,dStamp):
@@ -400,6 +404,7 @@ def getPath():
             sesVars[varKey]=tType
     except:
         g=1
+
 def runDetectionTask():
     
     # A) Update the dict from gui, in case the user changed things.
@@ -493,6 +498,7 @@ def runDetectionTask():
     'lick1_Data','pythonState','thrLicksA','motion','contrast','orientation']
 
     # Temp Trial Variability
+
     f=csSesHDF.makeHDF(sesVars['dirPath']+'/',sesVars['subjID'] + '_ses{}'.format(sesVars['curSession']),dStamp)
     pyState=1
     lickCo=0  
@@ -522,7 +528,8 @@ def runDetectionTask():
             sesVars['totalTrials']=int(totalTrials_TV.get())
             sesVars['shapingTrial']=int(shapingTrial_TV.get())
             sesVars['lickAThr']=int(lickAThr_TV.get())
-            sesVars['chanPlot']=int(chanPlot_TV.get())
+            sesVars['chanPlot']=chanPlotIV.get()
+            sesVars['minStimTime']=int(minStimTime_TV.get())
             if sesVars['trialNum']>sesVars['totalTrials']:
                 sesVars['sessionOn']=0
 
@@ -636,14 +643,13 @@ def runDetectionTask():
                         reported=0
                         lickCounter=0
                         lastLick=0
-                        minStimTime=2500
                         sHeaders[pyState]=1
                         sHeaders[np.setdiff1d(sList,pyState)]=0
      
-                    if lastLick>0.005:
+                    if lastLick>0.01:
                         reported=1
 
-                    if tStateTime>minStimTime:
+                    if tStateTime>sesVars['minStimTime']:
                         if reported==1 or sesVars['shapingTrial']:
                             stateSync=0
                             pyState=4
@@ -664,14 +670,13 @@ def runDetectionTask():
                         reported=0
                         lickCounter=0
                         lastLick=0
-                        minStimTime=2500
                         sHeaders[pyState]=1
                         sHeaders[np.setdiff1d(sList,pyState)]=0
      
                     if lastLick>0.005:
                         reported=1
 
-                    if tStateTime>minStimTime:
+                    if tStateTime>sesVars['minStimTime']:
                         if reported==1:
                             stateSync=0
                             pyState=5
@@ -721,13 +726,45 @@ def runDetectionTask():
                         teensy.write('a1>'.encode('utf-8'))
                         print('last trial took: {} seconds'.format(sampLog[-1]/1000))
         except:
-            f["session_{}".format(sesVars['curSession'])]=sesData[0:loopCnt-1,:]
+            f["session_{}".format(sesVars['curSession'])]=sesData[0:loopCnt,:]
             f["session_{}".format(sesVars['curSession'])].attrs['contrasts']=contrastList
             f["session_{}".format(sesVars['curSession'])].attrs['orientations']=orientationList
             f["session_{}".format(sesVars['curSession'])].attrs['spatialFreqs']=spatialFreqs
             f["session_{}".format(sesVars['curSession'])].attrs['waitTimePads']=waitPad
             f["session_{}".format(sesVars['curSession'])].attrs['trialDurs']=sampLog
             f.close()
+
+            tc['state'] = 'normal'
+            sesVars['curSession']=sesVars['curSession']+1
+            teensy.write('a0>'.encode('utf-8'))
+            time.sleep(0.05)
+            teensy.write('a0>'.encode('utf-8'))
+
+            print('finished {} trials'.format(sesVars['trialNum']-1))
+            sesVars['trialNum']=0
+            csVar.updateDictFromGUI(sesVars)
+            sesVars_bindings=csVar.dictToPandas(sesVars)
+            sesVars_bindings.to_csv(sesVars['dirPath'] + '/' +'sesVars.csv')
+
+            # Update MQTT Feeds
+            if sesVars['logMQTT']==1:
+                sesVars['curWeight']=21
+                csAIO.rigOffLog(aio,sesVars['subjID'],sesVars['curWeight'],curMachine,sesVars['mqttUpDel'])
+
+                # update animal's water consumed feed.
+                sesVars['waterConsumed']=int(sesVars['waterConsumed']*10000)/10000
+                aio.send('{}_waterConsumed'.format(sesVars['subjID']),sesVars['waterConsumed'])
+                topAmount=sesVars['consumpTarg']-sesVars['waterConsumed']
+                topAmount=int(topAmount*10000)/10000
+                if topAmount<0:
+                    topAmount=0
+             
+                print('give {:0.3f} ml later by 12 hrs from now'.format(topAmount))
+                aio.send('{}_topVol'.format(sesVars['subjID']),topAmount)
+                
+            teensy.close()
+            sesVars['canQuit']=1
+            quitButton['text']="Quit"
                          
     
     f["session_{}".format(sesVars['curSession'])]=sesData[0:loopCnt,:]
@@ -769,6 +806,7 @@ def runDetectionTask():
     teensy.close()
     sesVars['canQuit']=1
     quitButton['text']="Quit"
+
 def closeup():
     tc['state'] = 'normal'
     csVar.updateDictFromGUI(sesVars)
@@ -853,7 +891,16 @@ if makeBar==0:
     lickAThr_entry=Entry(taskBar, width=10, textvariable=lickAThr_TV)
     lickAThr_entry.grid(row=lcThrRw,column=1,padx=0,sticky=W)
 
-    sBtRw=8
+    lcThrRw=8
+    minStimTime_label=Label(taskBar, text="Min Stim Time:", justify=LEFT)
+    minStimTime_label.grid(row=lcThrRw,column=0,padx=0,sticky=W)
+    minStimTime_TV=StringVar(taskBar)
+    minStimTime_TV.set(sesVars['minStimTime'])
+    minStimTime_entry=Entry(taskBar, width=10, textvariable=minStimTime_TV)
+    minStimTime_entry.grid(row=lcThrRw,column=1,padx=0,sticky=W)
+
+
+    sBtRw=9
     shapingTrial_label=Label(taskBar, text="Shaping Trial (0/1):", justify=LEFT)
     shapingTrial_label.grid(row=sBtRw,column=0,padx=0,sticky=W)
     shapingTrial_TV=StringVar(taskBar)
@@ -861,29 +908,34 @@ if makeBar==0:
     shapingTrial_entry=Entry(taskBar, width=10, textvariable=shapingTrial_TV)
     shapingTrial_entry.grid(row=sBtRw,column=1,padx=0,sticky=W)
 
-    cprw=9
-    chanPlot_label=Label(taskBar, text="channel to plot:", justify=LEFT)
-    chanPlot_label.grid(row=cprw,column=0,padx=0,sticky=W)
-    chanPlot_TV=StringVar(taskBar)
-    chanPlot_TV.set(sesVars['chanPlot'])
-    chanPlot_entry=Entry(taskBar, width=10, textvariable=chanPlot_TV)
-    chanPlot_entry.grid(row=cprw,column=1,padx=0,sticky=W)
-
-
-
-    # MQTT Stuff
-
+    # Main Buttons
     ttRw=10
     blL=Label(taskBar, text=" ——————— ",justify=LEFT)
     blL.grid(row=ttRw,column=0,padx=0,sticky=W)
 
-    btnRw=11
+    cprw=11
+    chanPlotIV=IntVar()
+    chanPlotIV.set(sesVars['chanPlot'])
+    Radiobutton(taskBar, text="Load Cell", variable=chanPlotIV, value=4).grid(row=cprw,column=0,padx=0,sticky=W)
+    Radiobutton(taskBar, text="Lick Sensor", variable=chanPlotIV, value=5).grid(row=cprw+1,column=0,padx=0,sticky=W)
+    Radiobutton(taskBar, text="Motion", variable=chanPlotIV, value=6).grid(row=cprw+2,column=0,padx=0,sticky=W)
+    Radiobutton(taskBar, text="Scope", variable=chanPlotIV, value=7).grid(row=cprw,column=1,padx=0,sticky=W)
+    Radiobutton(taskBar, text="Thr Licks", variable=chanPlotIV, value=9).grid(row=cprw+1,column=1,padx=0,sticky=W)
+
+
+    # MQTT Stuff
+
+    ttRw=14
+    blL=Label(taskBar, text=" ——————— ",justify=LEFT)
+    blL.grid(row=ttRw,column=0,padx=0,sticky=W)
+
+    btnRw=15
     logMQTT_SV=StringVar()
     logMQTT_Toggle=Checkbutton(taskBar,text="Log MQTT Info?",variable=sesVars['logMQTT'],onvalue=1,offvalue=0)
     logMQTT_Toggle.grid(row=btnRw,column=0)
     logMQTT_Toggle.select()
 
-    ttRw=12
+    ttRw=16
     hpL=Label(taskBar, text="Hash Path:",justify=LEFT)
     hpL.grid(row=ttRw,column=0,padx=0,sticky=W)
     hashPath_TV=StringVar(taskBar)
@@ -891,7 +943,7 @@ if makeBar==0:
     te = Entry(taskBar,width=10,textvariable=hashPath_TV)
     te.grid(row=ttRw,column=1,padx=0,sticky=W)
 
-    ttRw=13
+    ttRw=17
     vpR=Label(taskBar, text="Vol/Rwd (~):",justify=LEFT)
     vpR.grid(row=ttRw,column=0,padx=0,sticky=W)
     volPerRwd_TV=StringVar(taskBar)
@@ -900,11 +952,11 @@ if makeBar==0:
     te.grid(row=ttRw,column=1,padx=0,sticky=W)
     
     # Main Buttons
-    ttRw=14
+    ttRw=18
     blL=Label(taskBar, text=" ——————— ",justify=LEFT)
     blL.grid(row=ttRw,column=0,padx=0,sticky=W)
 
-    btnRw=15
+    btnRw=19
     tc = Button(taskBar,text="Task: Detection",width=c1Wd,command=runDetectionTask)
     tc.grid(row=btnRw,column=0)
     tc['state'] = 'disabled'
