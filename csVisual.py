@@ -1,4 +1,4 @@
-# csVisual v0.65
+# csVisual v0.7
 # 
 # Chris Deister - cdeister@brown.edu
 # Anything that is licenseable is governed by a MIT License found in the github directory. 
@@ -21,6 +21,7 @@ import sys
 # import pygsheets
 from Adafruit_IO import Client
 import pandas as pd
+from scipy.stats import norm
 
 root = Tk()
 
@@ -197,11 +198,13 @@ class csSerial(object):
     def readSerialData(self,comObj,headerString,varCount):
         sR=[]
         newData=0
+
         if comObj.inWaiting()>0:
             sR=comObj.readline().strip().decode()
             sR=sR.split(',')
             if len(sR)==varCount and sR[0]==headerString:
                 newData=1
+
         self.sR=sR
         self.newData=newData
         return self.sR,self.newData
@@ -258,7 +261,6 @@ class csPlot(object):
         self.lA_Axes.set_xticks([])
         # self.lA_Axes.set_yticks([])
         self.lA_Line,=self.lA_Axes.plot([],color="cornflowerblue",lw=1)
-
         self.trialFig.canvas.draw_idle()
         plt.show(block=False)
         self.trialFig.canvas.flush_events()
@@ -266,14 +268,13 @@ class csPlot(object):
         self.lA_Axes.draw_artist(self.lA_Axes.patch)
         self.trialFig.canvas.flush_events()
 
+        # STATE AXES
         self.stAxes = self.trialFig.add_subplot(2,2,2) #col,rows
         self.stAxes.set_ylim([-0.02,1.02])
         self.stAxes.set_xlim([-0.02,1.02])
         self.stAxes.set_axis_off()
         self.stMrkSz=28
         self.txtOff=-0.02
-
-
         self.stPLine,=self.stAxes.plot(self.pltX,self.pltY,marker='o',\
             markersize=self.stMrkSz,markeredgewidth=2,\
             markerfacecolor="white",markeredgecolor="black",lw=0)
@@ -284,36 +285,35 @@ class csPlot(object):
                 horizontalalignment='center',fontsize=9,fontdict={'family': 'monospace'})
             k=k+1
 
-        self.curStLine,=self.stAxes.plot(self.pltX[1],self.pltY[1],\
-            marker='o',markersize=self.stMrkSz+2,markeredgewidth=2,\
-            markerfacecolor=self.pClrs['cBlue'],\
-            markeredgecolor='black',lw=0,alpha=0.5)
+        self.curStLine,=self.stAxes.plot(self.pltX[1],self.pltY[1],marker='o',markersize=self.stMrkSz+2,\
+            markeredgewidth=2,markerfacecolor=self.pClrs['cBlue'],markeredgecolor='black',lw=0,alpha=0.5)
         plt.show(block=False)
+        
         self.trialFig.canvas.flush_events()
         self.stAxes.draw_artist(self.stPLine)
         self.stAxes.draw_artist(self.curStLine)
         self.stAxes.draw_artist(self.stAxes.patch)
 
+        # OUTCOME AXES
         self.outcomeAxis=self.trialFig.add_subplot(2,2,3) #col,rows
-        self.outcomeLine,=self.outcomeAxis.plot([],[],marker="o",markeredgecolor="black",\
-            markerfacecolor="cornflowerblue",markersize=12,lw=0,alpha=0.5,markeredgewidth=2)
         self.outcomeAxis.axis([-2,100,-0.2,1.2])
         self.outcomeAxis.yaxis.tick_left()
-        self.outcomeAxis.set_title('Correct RR: {} , FR: {}'.format(0,0),fontsize=10)
 
-        # cache once 
+        self.stimOutcomeLine,=self.outcomeAxis.plot([],[],marker="o",markeredgecolor="black",\
+            markerfacecolor="cornflowerblue",markersize=12,lw=0,alpha=0.5,markeredgewidth=2)
+        
+        self.noStimOutcomeLine,=self.outcomeAxis.plot([],[],marker="X",markeredgecolor="black",\
+            markerfacecolor="red",markersize=12,lw=0,alpha=0.5,markeredgewidth=2)
+        self.outcomeAxis.set_title('CR: {} , FR: {}'.format(0,0),fontsize=10)
         plt.show(block=False)
         self.trialFig.canvas.flush_events()
-        self.outcomeAxis.draw_artist(self.outcomeLine)
+        self.outcomeAxis.draw_artist(self.stimOutcomeLine)
+        self.outcomeAxis.draw_artist(self.noStimOutcomeLine)
         self.outcomeAxis.draw_artist(self.outcomeAxis.patch)
-
-
-
 
     def quickUpdateTrialFig(self,trialNum,totalTrials,curState):
         self.trialFig.suptitle('trial # {} of {}; State # {}'.format(trialNum,totalTrials,curState),fontsize=10)
         self.trialFig.canvas.flush_events()
-
 
     def updateTrialFig(self,xData,yData,trialNum,totalTrials,curState):
         try:
@@ -345,13 +345,30 @@ class csPlot(object):
         except:
              a=1
 
-    def updateOutcome(self,trialNum,responseVector,totalTrials):
-        xData=[1,2,3,4]
-        self.curStLine.set_xdata(xData)
-        self.curStLine.set_ydata(responseVector)
+    def updateOutcome(self,stimTrials,stimResponses,noStimTrials,noStimResponses,totalTrials):
+        sM=0.001
+        nsM=0.001
+
+        if len(stimResponses)>0:
+            sM=int(np.mean(stimResponses)*100)*0.01
+        if len(noStimResponses)>0:
+            nsM=int(np.mean(noStimResponses)*100)*0.01
+
+
+        dpEst=norm.ppf(max(sM,0.001))-norm.ppf(max(nsM,0.001))
+        # self.outcomeAxis.set_title('CR: {} , FR: {}'.format(sM,nsM),fontsize=10)
+        self.outcomeAxis.set_title('dprime: {}'.format(dpEst),fontsize=10)
+        self.stimOutcomeLine.set_xdata(stimTrials)
+        self.stimOutcomeLine.set_ydata(stimResponses)
+        self.noStimOutcomeLine.set_xdata(noStimTrials)
+        self.noStimOutcomeLine.set_ydata(noStimResponses)
         self.outcomeAxis.set_xlim([-1,totalTrials+1])
-        self.outcomeAxis.draw_artist(self.curStLine)
+        self.outcomeAxis.draw_artist(self.stimOutcomeLine)
+        self.outcomeAxis.draw_artist(self.noStimOutcomeLine)
         self.outcomeAxis.draw_artist(self.outcomeAxis.patch)
+
+        self.trialFig.canvas.draw_idle()
+        self.trialFig.canvas.flush_events()
 
 # $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 # $$$$$$$$$$$$$ Main Program Body $$$$$$$$$$$$$$$$
@@ -456,7 +473,7 @@ def runDetectionTask():
     maxTrials=1000
     sesVars['contrastChange']=1
     if sesVars['contrastChange']:
-        contList=np.array([0,0,1,5,10,20,40,50,70,90,100,100])
+        contList=np.array([0,0,0,1,2,5,10,20,40,50,70,90,100,100])
         randContrasts=contList[np.random.randint(0,len(contList),size=maxTrials)]
     elif sesVars['contrastChange']==0:
         defaultContrast=100
@@ -534,7 +551,10 @@ def runDetectionTask():
     trialSamps=[0,0]
     sampLog=[]
     tc['state'] = 'disabled'
-
+    stimResponses=[]
+    stimTrials=[]
+    noStimResponses=[]
+    noStimTrials=[]
 
     loopCnt=0
     sesVars['trialNum']=0
@@ -547,7 +567,11 @@ def runDetectionTask():
         try:
             # this determines if we keep running
             sesVars['totalTrials']=int(totalTrials_TV.get())
-            sesVars['shapingTrial']=int(shapingTrial_TV.get())
+            try:
+                sesVars['shapingTrial']=int(shapingTrial_TV.get())
+            except:
+                sesVars['shapingTrial']=0
+                shapingTrial_TV.set('0')
             sesVars['lickAThr']=int(lickAThr_TV.get())
             sesVars['chanPlot']=chanPlotIV.get()
             sesVars['minStimTime']=int(minStimTime_TV.get())
@@ -576,10 +600,6 @@ def runDetectionTask():
                     csPlt.updateTrialFig(np.arange(len(sesData[loopCnt-plotSamps:loopCnt,sesVars['chanPlot']])),\
                         sesData[loopCnt-plotSamps:loopCnt,sesVars['chanPlot']],sesVars['trialNum'],sesVars['totalTrials'],tTeensyState)
 
-                # # this determines if we keep running
-                # sesVars['totalTrials']=int(totalTrials_TV.get())
-                # if sesVars['trialNum']>sesVars['totalTrials']:
-                #     sesVars['sessionOn']=0
 
                 # look for licks
                 latchTime=50
@@ -611,7 +631,6 @@ def runDetectionTask():
                     
                     if sHeaders[pyState]==0:
                         sesVars['trialNum']=sesVars['trialNum']+1
-                        csPlt.updateOutcome(4,[1,0,1,0],100)
 
                         csPlt.updateStateFig(1)
                         trialSamps[0]=loopCnt-1
@@ -666,23 +685,28 @@ def runDetectionTask():
                         lickCounter=0
                         lastLick=0
                         sHeaders[pyState]=1
-                        sHeaders[np.setdiff1d(sList,pyState)]=0
+                        sHeaders[np.setdiff1d(sList,pyState)]=0                        
      
                     if lastLick>0.01:
                         reported=1
 
                     if tStateTime>sesVars['minStimTime']:
                         if reported==1 or sesVars['shapingTrial']:
+                            stimTrials.append(sesVars['trialNum'])
+                            stimResponses.append(1)
                             stateSync=0
                             pyState=4
                             teensy.write('a4>'.encode('utf-8'))
+                            csPlt.updateOutcome(stimTrials,stimResponses,noStimTrials,noStimResponses,sesVars['totalTrials'])
                         elif reported==0:
+                            stimTrials.append(sesVars['trialNum'])
+                            stimResponses.append(0)
                             stateSync=0
                             pyState=1
                             trialSamps[1]=loopCnt
                             sampLog.append(np.diff(trialSamps)[0])
-                            stateSync=0
                             teensy.write('a1>'.encode('utf-8'))
+                            csPlt.updateOutcome(stimTrials,stimResponses,noStimTrials,noStimResponses,sesVars['totalTrials'])
                             print('miss: last trial took: {} seconds'.format(sampLog[-1]/1000))
 
                 
@@ -700,16 +724,21 @@ def runDetectionTask():
 
                     if tStateTime>sesVars['minStimTime']:
                         if reported==1:
+                            noStimTrials.append(sesVars['trialNum'])
+                            noStimResponses.append(1)
                             stateSync=0
                             pyState=5
                             teensy.write('a5>'.encode('utf-8'))
+                            csPlt.updateOutcome(stimTrials,stimResponses,noStimTrials,noStimResponses,sesVars['totalTrials'])
                         elif reported==0:
+                            noStimTrials.append(sesVars['trialNum'])
+                            noStimResponses.append(0)
                             stateSync=0
                             pyState=1
                             trialSamps[1]=loopCnt
                             sampLog.append(np.diff(trialSamps)[0])
-                            stateSync=0
                             teensy.write('a1>'.encode('utf-8'))
+                            csPlt.updateOutcome(stimTrials,stimResponses,noStimTrials,noStimResponses,sesVars['totalTrials'])
                             print('cor rejection: last trial took: {} seconds'.format(sampLog[-1]/1000))
 
                 if pyState == 4 and stateSync==1:
@@ -748,14 +777,7 @@ def runDetectionTask():
                         teensy.write('a1>'.encode('utf-8'))
                         print('last trial took: {} seconds'.format(sampLog[-1]/1000))
         except:
-            f["session_{}".format(sesVars['curSession'])]=sesData[0:loopCnt,:]
-            f["session_{}".format(sesVars['curSession'])].attrs['contrasts']=contrastList
-            f["session_{}".format(sesVars['curSession'])].attrs['orientations']=orientationList
-            f["session_{}".format(sesVars['curSession'])].attrs['spatialFreqs']=spatialFreqs
-            f["session_{}".format(sesVars['curSession'])].attrs['waitTimePads']=waitPad
-            f["session_{}".format(sesVars['curSession'])].attrs['trialDurs']=sampLog
-            f.close()
-
+            
             tc['state'] = 'normal'
             sesVars['curSession']=sesVars['curSession']+1
             teensy.write('a0>'.encode('utf-8'))
@@ -767,6 +789,16 @@ def runDetectionTask():
             csVar.updateDictFromGUI(sesVars)
             sesVars_bindings=csVar.dictToPandas(sesVars)
             sesVars_bindings.to_csv(sesVars['dirPath'] + '/' +'sesVars.csv')
+
+            f["session_{}".format(sesVars['curSession']-1)]=sesData[0:loopCnt,:]
+            f["session_{}".format(sesVars['curSession']-1)].attrs['contrasts']=contrastList
+            f["session_{}".format(sesVars['curSession']-1)].attrs['orientations']=orientationList
+            f["session_{}".format(sesVars['curSession']-1)].attrs['spatialFreqs']=spatialFreqs
+            f["session_{}".format(sesVars['curSession']-1)].attrs['waitTimePads']=waitPad
+            f["session_{}".format(sesVars['curSession']-1)].attrs['trialDurs']=sampLog
+            f.close()
+
+            
 
             # Update MQTT Feeds
             if sesVars['logMQTT']==1:
@@ -791,6 +823,10 @@ def runDetectionTask():
     
     f["session_{}".format(sesVars['curSession'])]=sesData[0:loopCnt,:]
     f["session_{}".format(sesVars['curSession'])].attrs['contrasts']=contrastList
+    f["session_{}".format(sesVars['curSession'])].attrs['stimResponses']=stimResponses
+    f["session_{}".format(sesVars['curSession'])].attrs['stimTrials']=stimTrials
+    f["session_{}".format(sesVars['curSession'])].attrs['noStimResponses']=noStimResponses
+    f["session_{}".format(sesVars['curSession'])].attrs['noStimTrials']=noStimTrials
     f["session_{}".format(sesVars['curSession'])].attrs['orientations']=orientationList
     f["session_{}".format(sesVars['curSession'])].attrs['spatialFreqs']=spatialFreqs
     f["session_{}".format(sesVars['curSession'])].attrs['waitTimePads']=waitPad
