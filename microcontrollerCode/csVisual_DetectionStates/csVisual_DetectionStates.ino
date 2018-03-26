@@ -122,6 +122,7 @@ void vStates() {
       if (headerStates[1] == 0) {
         visStimOff();
         genericHeader(1);
+        blockStateChange = 0;
       }
       genericStateBody();
     }
@@ -133,6 +134,7 @@ void vStates() {
       if (headerStates[2] == 0) {
         genericHeader(2);
         visStimOn();
+        blockStateChange = 0;
       }
       genericStateBody();
     }
@@ -142,6 +144,7 @@ void vStates() {
     // **************************************
     else if (knownValues[0] == 3) {
       if (headerStates[3] == 0) {
+        blockStateChange = 0;
         genericHeader(3);
         visStimOn();
       }
@@ -155,8 +158,8 @@ void vStates() {
       if (headerStates[4] == 0) {
         genericHeader(4);
         visStimOff();
-        blockStateChange = 1;
         rewarding = 0;
+        blockStateChange = 1;
       }
       genericStateBody();
       if (rewardDelivTypeA == 0 && rewarding == 0) {
@@ -192,9 +195,9 @@ void vStates() {
     else if (knownValues[0] == 6) {
       if (headerStates[6] == 0) {
         genericHeader(6);
-        visStimOff();
-        blockStateChange = 1;
+//        visStimOff();
         rewarding = 0;
+        blockStateChange = 0;
       }
       genericStateBody();
       if (rewardDelivTypeA == 0 && rewarding == 0) {

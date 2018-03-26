@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import socket
 import sys
-# import pygsheets
+import pygsheets
 from Adafruit_IO import Client
 import pandas as pd
 from scipy.stats import norm
@@ -190,6 +190,35 @@ class csMQTT(object):
 
         # c) log the weight to subject's weight tracking feed.
         mqObj.send('{}_weight'.format(sID,sWeight),sWeight)
+
+    def openGoogleSheet(self,gAPIHashPath):
+        #gAPIHashPath='/Users/cad/simpHashes/client_secret.json'
+        self.gc = pygsheets.authorize(gAPIHashPath)
+        return self.gc
+    
+    def updateGoogleSheet(self,sheetCon,subID,cellID,valUp):
+        sh = sheetCon.open('WR Log')
+        wsTup=sh.worksheets()
+        wks = sh.worksheet_by_title(subID)
+        curData=np.asarray(wks.get_all_values(returnas='matrix'))
+        dd=np.where(curData==cellID)
+        # Assuming indexes are in row 1, then I just care about dd[1]
+        varCol=dd[1]+1
+        # now let's figure out which row to update
+        entries=curData[:,dd[1]]
+        # how many entries exist in that column
+        numRows=len(entries)
+        lastEntry=curData[numRows-1,dd[1]]
+        if lastEntry=='':
+            wks.update_cell((numRows,varCol),valUp)
+            self.updatedRow=numRows
+            self.updatedCol=varCol
+        elif lastEntry != '':
+            wks.update_cell((numRows+1,varCol),valUp)
+            self.updatedRow=numRows
+            self.updatedCol=varCol
+        return 
+
 class csSerial(object):
     def __init__(self,a):
         self.a=1
@@ -230,6 +259,9 @@ class csSerial(object):
         return self.returnVar,self.dNew
 class csPlot(object):
     def __init__(self,stPlotX={},stPlotY={},stPlotRel={},pClrs={},pltX=[],pltY=[]):
+        
+        # initial y bounds for oscope plot
+
         #start state
         self.stPlotX={'init':0.10,'wait':0.10,'stim':0.30,'catch':0.30,'rwd':0.50,'TO':0.50}
         self.stPlotY={'init':0.65,'wait':0.40,'stim':0.52,'catch':0.28,'rwd':0.52,'TO':0.28}
@@ -245,7 +277,6 @@ class csPlot(object):
         for yVals in list(self.stPlotY.values()):
             self.pltY.append(yVals)
 
-
     def makeTrialFig(self,fNum):
         self.binDP=[]
         # Make feedback figure.
@@ -256,12 +287,10 @@ class csPlot(object):
         eval('mng.window.wm_geometry("{}")'.format(self.trialFramePosition))
         plt.show(block=False)
         self.trialFig.canvas.flush_events()
-        
+
         # add the lickA axes and lines.
-        lA_YMin=-100
-        lA_YMax=1200
         self.lA_Axes=self.trialFig.add_subplot(2,2,1) #col,rows
-        self.lA_Axes.set_ylim([lA_YMin,lA_YMax])
+        self.lA_Axes.set_ylim([-100,1200])
         self.lA_Axes.set_xticks([])
         # self.lA_Axes.set_yticks([])
         self.lA_Line,=self.lA_Axes.plot([],color="cornflowerblue",lw=1)
@@ -289,7 +318,7 @@ class csPlot(object):
                 horizontalalignment='center',fontsize=9,fontdict={'family': 'monospace'})
             k=k+1
 
-        self.curStLine,=self.stAxes.plot(self.pltX[1],self.pltY[1],marker='o',markersize=self.stMrkSz+2,\
+        self.curStLine,=self.stAxes.plot(self.pltX[1],self.pltY[1],marker='o',markersize=self.stMrkSz+1,\
             markeredgewidth=2,markerfacecolor=self.pClrs['cBlue'],markeredgecolor='black',lw=0,alpha=0.5)
         plt.show(block=False)
         
@@ -321,12 +350,13 @@ class csPlot(object):
         self.trialFig.suptitle('trial # {} of {}; State # {}'.format(trialNum,totalTrials,curState),fontsize=10)
         self.trialFig.canvas.flush_events()
 
-    def updateTrialFig(self,xData,yData,trialNum,totalTrials,curState):
+    def updateTrialFig(self,xData,yData,trialNum,totalTrials,curState,yLims):
         try:
             self.trialFig.suptitle('trial # {} of {}; State # {}'.format(trialNum,totalTrials,curState),fontsize=10)
             self.lA_Line.set_xdata(xData)
             self.lA_Line.set_ydata(yData)
             self.lA_Axes.set_xlim([xData[0],xData[-1]])
+            self.lA_Axes.set_ylim([yLims[0],yLims[1]])
             self.lA_Axes.draw_artist(self.lA_Line)
             self.lA_Axes.draw_artist(self.lA_Axes.patch)
             
@@ -357,15 +387,15 @@ class csPlot(object):
         dpBinSz=10
 
         if len(stimResponses)>0:
-            sM=int(np.mean(stimResponses)*100)*0.01
+            sM=np.mean(stimResponses)
         if len(noStimResponses)>0:
-            nsM=int(np.mean(noStimResponses)*100)*0.01
+            nsM=np.mean(noStimResponses)
         
 
 
         dpEst=norm.ppf(max(sM,0.0001))-norm.ppf(max(nsM,0.0001))
         # self.outcomeAxis.set_title('CR: {} , FR: {}'.format(sM,nsM),fontsize=10)
-        self.outcomeAxis.set_title('dprime: {}'.format(dpEst),fontsize=10)
+        self.outcomeAxis.set_title('dprime: {:0.3f}'.format(dpEst),fontsize=10)
         self.stimOutcomeLine.set_xdata(stimTrials)
         self.stimOutcomeLine.set_ydata(stimResponses)
         self.noStimOutcomeLine.set_xdata(noStimTrials)
@@ -534,20 +564,27 @@ def runDetectionTask():
         sesVars['curWeight']=20
 
     # Optional: Update MQTT Feeds
+    sesVars['logMQTT']=1
     if sesVars['logMQTT']==1:
 
         aioHashPath=sesVars['hashPath'] + '/simpHashes/cdIO.txt'
         # aio is csAIO's mq broker object.
         aio=csAIO.connectBroker(aioHashPath)
-        
         try:
             csAIO.rigOnLog(aio,sesVars['subjID'],sesVars['curWeight'],curMachine,sesVars['mqttUpDel'])
         except:
             print('no mqtt logging')
-            sesVars['logMQTT']=0
-            logMQTT_Toggle.deselect()
         [sesVars['waterConsumed'],hrDiff]=csAIO.getDailyConsumption(aio,sesVars['subjID'],sesVars['rigGMTZoneDif'],12)
         print('{} already had {} ml'.format(sesVars['subjID'],sesVars['waterConsumed']))
+
+        try:
+            print('debug in sheet')
+            gHashPath=sesVars['hashPath'] + '/simpHashes/client_secret.json'
+            gSheet=csAIO.openGoogleSheet(gHashPath)
+            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Weight Pre',sesVars['curWeight'])
+        except:
+            print('did not log to google sheet')
+
 
     # F) Set some session flow variables before the task begins
     # Turn the session on. 
@@ -632,9 +669,15 @@ def runDetectionTask():
                 # Plot updates.
                 plotSamps=200
                 updateCount=500
+                lyMin=-1
+                lyMax=1025
+                if sesVars['chanPlot']==9 or sesVars['chanPlot']==7:
+                    lyMin=-0.1
+                    lyMax=1.1
                 if loopCnt>plotSamps and np.mod(loopCnt,updateCount)==0:
                     csPlt.updateTrialFig(np.arange(len(sesData[loopCnt-plotSamps:loopCnt,sesVars['chanPlot']])),\
-                        sesData[loopCnt-plotSamps:loopCnt,sesVars['chanPlot']],sesVars['trialNum'],sesVars['totalTrials'],tTeensyState)
+                        sesData[loopCnt-plotSamps:loopCnt,sesVars['chanPlot']],sesVars['trialNum'],\
+                        sesVars['totalTrials'],tTeensyState,[lyMin,lyMax])
 
 
                 # look for licks
@@ -725,7 +768,7 @@ def runDetectionTask():
                         sHeaders[pyState]=1
                         sHeaders[np.setdiff1d(sList,pyState)]=0                        
      
-                    if lastLick>0.01:
+                    if lastLick>0.02:
                         reported=1
 
                     if tStateTime>sesVars['minStimTime']:
@@ -865,6 +908,10 @@ def runDetectionTask():
                 print('give {:0.3f} ml later by 12 hrs from now'.format(topAmount))
                 aio.send('{}_topVol'.format(sesVars['subjID']),topAmount)
             
+            csVar.updateDictFromGUI(sesVars)
+            sesVars_bindings=csVar.dictToPandas(sesVars)
+            sesVars_bindings.to_csv(sesVars['dirPath'] + '/' +'sesVars.csv')
+
             csSer.flushBuffer(teensy) 
             teensy.close()
             sesVars['canQuit']=1
@@ -894,9 +941,8 @@ def runDetectionTask():
 
     print('finished {} trials'.format(sesVars['trialNum']-1))
     sesVars['trialNum']=0
-    csVar.updateDictFromGUI(sesVars)
-    sesVars_bindings=csVar.dictToPandas(sesVars)
-    sesVars_bindings.to_csv(sesVars['dirPath'] + '/' +'sesVars.csv')
+
+
 
     # Update MQTT Feeds
     if sesVars['logMQTT']==1:
@@ -904,19 +950,44 @@ def runDetectionTask():
             sesVars['curWeight']=(np.mean(sesData[loopCnt-plotSamps:loopCnt,4])-sesVars['loadBaseline'])*sesVars['loadScale'];
         except:
             sesVars['curWeight']=21
-        csAIO.rigOffLog(aio,sesVars['subjID'],sesVars['curWeight'],curMachine,sesVars['mqttUpDel'])
 
-        # update animal's water consumed feed.
         sesVars['waterConsumed']=int(sesVars['waterConsumed']*10000)/10000
-        aio.send('{}_waterConsumed'.format(sesVars['subjID']),sesVars['waterConsumed'])
         topAmount=sesVars['consumpTarg']-sesVars['waterConsumed']
         topAmount=int(topAmount*10000)/10000
         if topAmount<0:
             topAmount=0
-     
         print('give {:0.3f} ml later by 12 hrs from now'.format(topAmount))
-        aio.send('{}_topVol'.format(sesVars['subjID']),topAmount)
+
+        try:
+            csAIO.rigOffLog(aio,sesVars['subjID'],sesVars['curWeight'],curMachine,sesVars['mqttUpDel'])
+            aio.send('{}_waterConsumed'.format(sesVars['subjID']),sesVars['waterConsumed'])
+            aio.send('{}_topVol'.format(sesVars['subjID']),topAmount)
+        except:
+            print('failed to log mqtt info')
+       
+        # update animal's water consumed feed.
+            
+        
+        
+
+        try:
+            gDStamp=datetime.datetime.now().strftime("%m/%d/%Y")
+            gTStamp=datetime.datetime.now().strftime("%H:%M:%S")
+            print('debug in sheet')
+            # gHashPath=sesVars['hashPath'] + '/simpHashes/client_secret.json'
+            gSheet=csAIO.openGoogleSheet(gHashPath)
+            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Weight Post',sesVars['curWeight'])
+            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Delivered',sesVars['waterConsumed'])
+            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Place',curMachine)
+            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Date Stamp',gDStamp)
+            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Time Stamp',gTStamp)
+        except:
+            print('did not log to google sheet')
     
+    csVar.updateDictFromGUI(sesVars)
+    sesVars_bindings=csVar.dictToPandas(sesVars)
+    sesVars_bindings.to_csv(sesVars['dirPath'] + '/' +'sesVars.csv')
+
     csSer.flushBuffer(teensy)
     teensy.close()
     sesVars['canQuit']=1
