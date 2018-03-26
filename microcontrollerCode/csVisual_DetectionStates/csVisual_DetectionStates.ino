@@ -2,29 +2,27 @@
 
 #define visSerial Serial1
 
-// Interupt Timing Params.
+// ****** PINS
+const int forceSensorPin = 20;
+const int lickPin = 21;
+const int scopePin = 24;
+const int motionPin = 23;
+const int rewardPinA = 35;
+const int syncPin = 25;
+
+// ****** Interupt Timing
 int sampsPerSecond = 1000;
 float evalEverySample = 1.0; // number of times to poll the vStates funtion
 
-// Basic State Flow
+// ****** Time & State Flow
 uint32_t loopCount = 0;
 uint32_t timeOffs;
 uint32_t stateTimeOffs;
 uint32_t trialTime;
 uint32_t stateTime;
+uint32_t trigTime = 10; 
 
 
-int forceSensor = 0;
-int lickSensorR = 0;
-int motionSensor = 0;
-bool scopeState =1;
-
-
-const int forceSensorPin = 20;
-const int lickPinR = 21;
-const int scopePin = 24;
-const int motionPin = 23;
-const int rewardPinA = 35;   // 35 is better, 13 is LED so good for debug.
 
 int rewardDelivTypeA = 0; // 0 is solenoid; 1 is syringe pump
 int rewardDelivTypeB = 0;
@@ -32,19 +30,24 @@ int rewardDelivTypeB = 0;
 bool blockStateChange = 0;
 bool rewarding = 0;
 
-// knownLabels[]={'tState','rewardTime','timeOut','contrast','orientation','sFreq','tFreq','visVariableUpdateBlock'};
-char knownHeaders[] = {'a', 'r', 't', 'c', 'o', 's', 'f', 'v'};
-int knownValues[] = {0, 500, 4000, 0, 0, 0, 0, 1};
-int knownCount = 7;
+// knownLabels[]={'tState','rewardTime','timeOut','contrast','orientation',
+// 'sFreq','tFreq','visVariableUpdateBlock','loadCell','motion','lickSensor'};
 
-int headerStates[] = {0, 0, 0, 0, 0, 0};
-int stateCount = 6;
+char knownHeaders[] = {'a', 'r', 't', 'c', 'o', 's', 'f', 'v', 'w', 'm', 'l'};
+int knownValues[] = {0, 500, 4000, 0, 0, 0, 0, 1, 0, 0, 0};
+int knownCount = 11;
 
-int tState = knownValues[0];
+// ************ data
+bool scopeState =1;
 
-int syncPin = 25;
+int headerStates[] = {0, 0, 0, 0, 0, 0, 0};
+int stateCount = 7;
+int lastState=0;
 
-unsigned int trigTime = 10;
+
+
+
+
 bool trigStuff = 0;
 
 void setup() {
@@ -52,7 +55,6 @@ void setup() {
   pinMode(syncPin, OUTPUT);
   digitalWrite(syncPin, LOW);
   pinMode(scopePin,INPUT);
-
   pinMode(rewardPinA, OUTPUT);
   digitalWrite(rewardPinA, LOW);
   visSerial.begin(9600);
@@ -67,28 +69,32 @@ void loop() {
 
 void vStates() {
 
-  // We always first look for variable changes.
-  // We always set tState to the serial variable entry it corresponds to.
-  int rVar = flagReceive(knownHeaders, knownValues);
+  // sometimes we block state changes, so let's log the last state.
+  lastState = knownValues[0];
 
+  // we then look for any changes to variables, or calls for updates
+  flagReceive(knownHeaders, knownValues);
+  
   // Some hardware actions need to complete before a state-change.
-  // So, we have a latch.
-  if (blockStateChange == 0) {
-    tState = knownValues[0];
+  // So, we have a latch for state change. We write over any change with lastState
+  if (blockStateChange == 1) {
+    knownValues[0]=lastState;
   }
+ 
 
   // **************************
   // State 0: Boot/Init State
   // **************************
-  if (tState == 0) {
+  if (knownValues[0] == 0) { 
     if (headerStates[0] == 0) {
       genericHeader(0);
       loopCount = 0;
     }
+    genericStateBody();
   }
 
   // Some things we do for all non-boot states before the state code:
-  if (tState != 0) {
+  if (knownValues[0] != 0) {
 
     // Get a time offset from when we arrived from 0.
     // This should be the start of the trial, regardless of state we start in.
@@ -103,7 +109,6 @@ void vStates() {
     if (loopCount >= trigTime && trigStuff == 0) {
       digitalWrite(syncPin, LOW);
       trigStuff = 1;
-      Serial.println("triggered");
     }
 
     //******************************************
@@ -113,7 +118,7 @@ void vStates() {
     // **************************
     // State 1: Boot/Init State
     // **************************
-    if (tState == 1) {
+    if (knownValues[0] == 1) {
       if (headerStates[1] == 0) {
         visStimOff();
         genericHeader(1);
@@ -124,7 +129,7 @@ void vStates() {
     // **************************
     // State 2: Stim State
     // **************************
-    else if (tState == 2) {
+    else if (knownValues[0] == 2) {
       if (headerStates[2] == 0) {
         genericHeader(2);
         visStimOn();
@@ -135,9 +140,10 @@ void vStates() {
     // **************************************
     // State 3: Catch-Trial (no-stim) State
     // **************************************
-    else if (tState == 3) {
+    else if (knownValues[0] == 3) {
       if (headerStates[3] == 0) {
         genericHeader(3);
+        visStimOn();
       }
       genericStateBody();
     }
@@ -145,7 +151,7 @@ void vStates() {
     // **************************************
     // State 4: Reward State
     // **************************************
-    else if (tState == 4) {
+    else if (knownValues[0] == 4) {
       if (headerStates[4] == 0) {
         genericHeader(4);
         visStimOff();
@@ -157,7 +163,7 @@ void vStates() {
         digitalWrite(rewardPinA, HIGH);
         rewarding = 1;
       }
-      if (stateTime >= knownValues[1]) {
+      if (stateTime >= uint32_t(knownValues[1])) {
         digitalWrite(rewardPinA, LOW);
         blockStateChange = 0;
       }
@@ -166,20 +172,42 @@ void vStates() {
     // **************************************
     // State 5: Time-Out State
     // **************************************
-    else if (tState == 5) {
+    else if (knownValues[0] == 5) {
       if (headerStates[5] == 0) {
         genericHeader(5);
         visStimOff();
         blockStateChange = 1;
       }
+      
       genericStateBody();
       // trap the state in time-out til timeout time over.
-      if (stateTime >= knownValues[2]) {
+      if (stateTime >= uint32_t(knownValues[2])) {
         blockStateChange = 0;
       }
     }
 
-    // Stuff we do for all non-boot states.
+    // **************************************
+    // State 6: Manual Reward State
+    // **************************************
+    else if (knownValues[0] == 6) {
+      if (headerStates[6] == 0) {
+        genericHeader(6);
+        visStimOff();
+        blockStateChange = 1;
+        rewarding = 0;
+      }
+      genericStateBody();
+      if (rewardDelivTypeA == 0 && rewarding == 0) {
+        digitalWrite(rewardPinA, HIGH);
+        rewarding = 1;
+      }
+      if (stateTime >= uint32_t(knownValues[1])) {
+        digitalWrite(rewardPinA, LOW);
+        blockStateChange = 0;
+      }
+    }
+
+    // ******* Stuff we do for all non-boot states.
     trialTime = millis() - timeOffs;
     dataReport();
     loopCount++;
@@ -195,13 +223,13 @@ void dataReport() {
   Serial.print(',');
   Serial.print(stateTime);
   Serial.print(',');
-  Serial.print(tState);
+  Serial.print(knownValues[0]); //state
   Serial.print(',');
-  Serial.print(forceSensor);
+  Serial.print(knownValues[8]);  //load cell
   Serial.print(',');
-  Serial.print(lickSensorR);
+  Serial.print(knownValues[10]); // lick sensor
   Serial.print(',');
-  Serial.print(motionSensor);
+  Serial.print(knownValues[9]); // motion
   Serial.print(',');
   Serial.println(scopeState);
 }
@@ -216,8 +244,8 @@ int flagReceive(char varAr[], int valAr[]) {
   int nVal;
   const byte numChars = 32;
   char writeChar[numChars];
-  int newData = 0;
   int selectedVar = 0;
+  int newData=0;
 
   while (Serial.available() > 0 && newData == 0) {
     rc = Serial.read();
@@ -248,7 +276,7 @@ int flagReceive(char varAr[], int valAr[]) {
         newData = 1;
         Serial.print("echo");
         Serial.print(',');
-        Serial.print(selectedVar);
+        Serial.print(varAr[selectedVar]);
         Serial.print(',');
         Serial.print(valAr[selectedVar]);
         Serial.print(',');
@@ -264,7 +292,7 @@ int flagReceive(char varAr[], int valAr[]) {
       }
     }
   }
-  return selectedVar; // tells us if a valid variable arrived.
+  return newData; // tells us if a valid variable arrived.
 }
 
 
@@ -272,10 +300,6 @@ void resetHeaders() {
   for ( int i = 0; i < stateCount; i++) {
     headerStates[i] = 0;
   }
-}
-
-void pollLickSensors() {
-  lickSensorR = analogRead(lickPinR);
 }
 
 void genericHeader(int stateNum) {
@@ -286,10 +310,10 @@ void genericHeader(int stateNum) {
 
 void genericStateBody() {
   stateTime = millis() - stateTimeOffs;
-  pollLickSensors();
-  motionSensor = analogRead(motionPin);
-  forceSensor = analogRead(forceSensorPin);
-  scopeState=digitalRead(scopePin);
+  knownValues[10] = analogRead(lickPin);
+  knownValues[9] = analogRead(motionPin);
+  knownValues[8] = analogRead(forceSensorPin);
+  scopeState = digitalRead(scopePin);
 }
 
 void visStimOff() {
