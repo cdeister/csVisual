@@ -1,0 +1,31 @@
+setting up a raspberry pi for scientific computing/data acquisition
+
+download raspian (full version) from raspberrypi.org:
+https://www.raspberrypi.org/downloads/raspbian/
+
+write to an micro sd card:
+I recomend etcher to acomplish this:
+https://etcher.io
+
+Boot up your pi with this SD card in.
+
+enable all things in the Prefences->Raspberry Pi Configuration
+
+install arduino from package manager
+install teensyduino:
+
+wget https://www.pjrc.com/teensy/49-teensy.rules
+sudo cp 49-teensy.rules /etc/udev/rules.d/
+
+wget https://www.pjrc.com/teensy/td_130/TeensyduinoInstall.linuxarm
+chmod +x TeensyduinoInstall.linuxarm
+./TeensyduinoInstall.linuxarm
+
+From
+http://geoffboeing.com/2016/03/scientific-python-raspberry-pi/
+
+I had an issue with numpy needing a dependency out of the box. I tried a number of things and tracked it down to needing libatlas3
+sudo apt-get install libatalas3-base
+
+install netatalk to connect to a mac easily via AFP
+sudo apt-get install netatalk

@@ -30,12 +30,14 @@ root = Tk()
 class csVariables(object):
     def __init__(self,sesVarDict={},stimVars={}):
 
-        self.sesVarDict={'curSession':1,'comPath_teensy':'/dev/cu.usbmodem4041951','baudRate_teensy':115200,\
-        'subjID':'an1','taskType':'detect','totalTrials':10,'logMQTT':1,'mqttUpDel':0.05,\
-        'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,'waterConsumed':0,'consumpTarg':1.5,\
-        'dirPath':'/Users/Deister/BData','hashPath':'/Users/cad','trialNum':0,'sessionOn':1,'canQuit':1,\
-        'contrastChange':0,'orientationChange':1,'spatialChange':1,'dStreams':10,'rewardDur':500,'lickAThr':900,\
-        'lickLatchA':0,'minNoLickTime':1000,'toTime':4000,'shapingTrial':1,'chanPlot':5,'minStimTime':1500,\
+        self.sesVarDict={'curSession':1,'comPath_teensy':'/dev/cu.usbmodem4041951',\
+        'baudRate_teensy':115200,'subjID':'an1','taskType':'detect','totalTrials':10,\
+        'logMQTT':1,'mqttUpDel':0.05,'curWeight':20,'rigGMTZoneDif':5,'volPerRwd':0.01,\
+        'waterConsumed':0,'consumpTarg':1.5,'dirPath':'/Users/Deister/BData',\
+        'hashPath':'/Users/cad','trialNum':0,'sessionOn':1,'canQuit':1,\
+        'contrastChange':0,'orientationChange':1,'spatialChange':1,'dStreams':10,\
+        'rewardDur':500,'lickAThr':900,'lickLatchA':0,'minNoLickTime':1000,\
+        'toTime':4000,'shapingTrial':1,'chanPlot':5,'minStimTime':1500,\
         'minTrialVar':200,'maxTrialVar':11000,'loadBaseline':114,'loadScale':0.42}
 
         self.stimVars={'contrast':1,'sFreq':4,'orientation':0}
@@ -218,7 +220,6 @@ class csMQTT(object):
             self.updatedRow=numRows
             self.updatedCol=varCol
         return 
-
 class csSerial(object):
     def __init__(self,a):
         self.a=1
@@ -401,7 +402,7 @@ class csPlot(object):
         self.noStimOutcomeLine.set_xdata(noStimTrials)
         self.noStimOutcomeLine.set_ydata(noStimResponses)
         
-        if (len(noStimResponses)+len(stimResponses))>=dpBinSz:
+        if len(noStimResponses)>0 and len(stimResponses)>0:
             sMb=int(np.mean(stimResponses[-dpBinSz:])*100)*0.01
             nsMb=int(np.mean(noStimResponses[-dpBinSz:])*100)*0.01
             self.binDP.append(norm.ppf(max(sMb,0.0001))-norm.ppf(max(nsMb,0.0001)))
@@ -492,9 +493,8 @@ def getPath():
 def runDetectionTask():
     
     # A) Update the dict from gui, in case the user changed things.
-    csVar.updateDictFromGUI(sesVars) 
+    csVar.updateDictFromGUI(sesVars)
 
-        
     # C) Create a com object to talk to the main Teensy.
     sesVars['comPath_teensy']=comPath_teensy_TV.get()
     teensy=csSer.connectComObj(sesVars['comPath_teensy'],sesVars['baudRate_teensy'])
@@ -574,14 +574,16 @@ def runDetectionTask():
             csAIO.rigOnLog(aio,sesVars['subjID'],sesVars['curWeight'],curMachine,sesVars['mqttUpDel'])
         except:
             print('no mqtt logging')
-        [sesVars['waterConsumed'],hrDiff]=csAIO.getDailyConsumption(aio,sesVars['subjID'],sesVars['rigGMTZoneDif'],12)
-        print('{} already had {} ml'.format(sesVars['subjID'],sesVars['waterConsumed']))
+        # [sesVars['waterConsumed'],hrDiff]=csAIO.getDailyConsumption(aio,sesVars['subjID'],\
+        #     sesVars['rigGMTZoneDif'],12)
+        # print('{} already had {} ml'.format(sesVars['subjID'],sesVars['waterConsumed']))
 
         try:
-            print('debug in sheet')
+            print('logging to sheet')
             gHashPath=sesVars['hashPath'] + '/simpHashes/client_secret.json'
             gSheet=csAIO.openGoogleSheet(gHashPath)
             csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Weight Pre',sesVars['curWeight'])
+            print('logged to sheet')
         except:
             print('did not log to google sheet')
 
@@ -605,8 +607,9 @@ def runDetectionTask():
 
     # Temp Trial Variability
     sesVars['curSession']=int(curSession_TV.get())
-    f=csSesHDF.makeHDF(sesVars['dirPath']+'/',sesVars['subjID'] + '_ses{}'.format(sesVars['curSession']),dStamp)
-    print('debug made hdf')
+    f=csSesHDF.makeHDF(sesVars['dirPath']+'/',sesVars['subjID'] + '_ses{}'.\
+        format(sesVars['curSession']),dStamp)
+
     pyState=1
     lastLick=0
     lickCounter=0
@@ -626,7 +629,6 @@ def runDetectionTask():
     stimTrials=[]
     noStimResponses=[]
     noStimTrials=[]
-    print('debug past hdf')
     loopCnt=0
     sesVars['trialNum']=0
     sesVars['lickLatchA']=0
@@ -711,7 +713,7 @@ def runDetectionTask():
                     
                     if sHeaders[pyState]==0:
                         sesVars['trialNum']=sesVars['trialNum']+1
-
+                        sesVars['minNoLickTime']=np.random.randint(900,2900)
                         csPlt.updateStateFig(1)
                         trialSamps[0]=loopCnt-1
 
@@ -778,7 +780,8 @@ def runDetectionTask():
                             stateSync=0
                             pyState=4
                             teensy.write('a4>'.encode('utf-8'))
-                            csPlt.updateOutcome(stimTrials,stimResponses,noStimTrials,noStimResponses,sesVars['totalTrials'])
+                            csPlt.updateOutcome(stimTrials,stimResponses,noStimTrials,noStimResponses,\
+                                sesVars['totalTrials'])
                         elif reported==0:
                             stimTrials.append(sesVars['trialNum'])
                             stimResponses.append(0)
@@ -787,7 +790,8 @@ def runDetectionTask():
                             trialSamps[1]=loopCnt
                             sampLog.append(np.diff(trialSamps)[0])
                             teensy.write('a1>'.encode('utf-8'))
-                            csPlt.updateOutcome(stimTrials,stimResponses,noStimTrials,noStimResponses,sesVars['totalTrials'])
+                            csPlt.updateOutcome(stimTrials,stimResponses,noStimTrials,noStimResponses,\
+                                sesVars['totalTrials'])
                             print('miss: last trial took: {} seconds'.format(sampLog[-1]/1000))
 
                 
@@ -811,7 +815,8 @@ def runDetectionTask():
                             stateSync=0
                             pyState=5
                             teensy.write('a5>'.encode('utf-8'))
-                            csPlt.updateOutcome(stimTrials,stimResponses,noStimTrials,noStimResponses,sesVars['totalTrials'])
+                            csPlt.updateOutcome(stimTrials,stimResponses,noStimTrials,noStimResponses,\
+                                sesVars['totalTrials'])
                         elif reported==0:
                             noStimTrials.append(sesVars['trialNum'])
                             noStimResponses.append(0)
@@ -820,7 +825,8 @@ def runDetectionTask():
                             trialSamps[1]=loopCnt
                             sampLog.append(np.diff(trialSamps)[0])
                             teensy.write('a1>'.encode('utf-8'))
-                            csPlt.updateOutcome(stimTrials,stimResponses,noStimTrials,noStimResponses,sesVars['totalTrials'])
+                            csPlt.updateOutcome(stimTrials,stimResponses,noStimTrials,noStimResponses,\
+                                sesVars['totalTrials'])
                             print('cor rejection: last trial took: {} seconds'.format(sampLog[-1]/1000))
 
                 if pyState == 4 and stateSync==1:
@@ -892,7 +898,7 @@ def runDetectionTask():
             # Update MQTT Feeds
             if sesVars['logMQTT']==1:
                 try:
-                    sesVars['curWeight']=(np.mean(sesData[-200:-1,4])-sesVars['loadBaseline'])*sesVars['loadScale'];
+                    sesVars['curWeight']=(np.mean(sesData[-200:-1,4])-sesVars['loadBaseline'])*sesVars['loadScale']
                 except:
                     sesVars['curWeight']=21
                 csAIO.rigOffLog(aio,sesVars['subjID'],sesVars['curWeight'],curMachine,sesVars['mqttUpDel'])
@@ -947,7 +953,8 @@ def runDetectionTask():
     # Update MQTT Feeds
     if sesVars['logMQTT']==1:
         try:
-            sesVars['curWeight']=(np.mean(sesData[loopCnt-plotSamps:loopCnt,4])-sesVars['loadBaseline'])*sesVars['loadScale'];
+            sesVars['curWeight']=(np.mean(sesData[loopCnt-plotSamps:loopCnt,4])-sesVars['loadBaseline'])*\
+            sesVars['loadScale'];
         except:
             sesVars['curWeight']=21
 
@@ -966,9 +973,6 @@ def runDetectionTask():
             print('failed to log mqtt info')
        
         # update animal's water consumed feed.
-            
-        
-        
 
         try:
             gDStamp=datetime.datetime.now().strftime("%m/%d/%Y")
@@ -1093,14 +1097,12 @@ if makeBar==0:
     minStimTime_entry=Entry(taskBar, width=10, textvariable=minStimTime_TV)
     minStimTime_entry.grid(row=lcThrRw,column=1,padx=0,sticky=W)
 
-
-    sBtRw=10
-    shapingTrial_label=Label(taskBar, text="Shaping Trial (0/1):", justify=LEFT)
-    shapingTrial_label.grid(row=sBtRw,column=0,padx=0,sticky=W)
-    shapingTrial_TV=StringVar(taskBar)
+    btnRw=10
+    shapingTrial_TV=IntVar()
     shapingTrial_TV.set(sesVars['shapingTrial'])
-    shapingTrial_entry=Entry(taskBar, width=10, textvariable=shapingTrial_TV)
-    shapingTrial_entry.grid(row=sBtRw,column=1,padx=0,sticky=W)
+    shapingTrial_Toggle=Checkbutton(taskBar,text="Shaping Trial",variable=shapingTrial_TV,onvalue=1,offvalue=0)
+    shapingTrial_Toggle.grid(row=btnRw,column=0,sticky=W)
+    shapingTrial_Toggle.select()
 
     # Main Buttons
     ttRw=11
@@ -1124,8 +1126,9 @@ if makeBar==0:
     blL.grid(row=ttRw,column=0,padx=0,sticky=W)
 
     btnRw=16
-    logMQTT_SV=StringVar()
-    logMQTT_Toggle=Checkbutton(taskBar,text="Log MQTT Info?",variable=sesVars['logMQTT'],onvalue=1,offvalue=0)
+    logMQTT_TV=IntVar()
+    logMQTT_TV.set(sesVars['chanPlot'])
+    logMQTT_Toggle=Checkbutton(taskBar,text="Log MQTT Info?",variable=logMQTT_TV,onvalue=1,offvalue=0)
     logMQTT_Toggle.grid(row=btnRw,column=0)
     logMQTT_Toggle.select()
 
