@@ -1,6 +1,18 @@
 #include <FlexiTimer2.h>
+#include <Wire.h>
 
-#define visSerial Serial1
+#include "Adafruit_VL6180X.h"
+#include "Adafruit_Si7021.h"
+#include "Adafruit_SGP30.h"
+
+
+#define dashSerial Serial1
+
+
+// ****** Make Sensor Objects
+Adafruit_Si7021 tempSensor = Adafruit_Si7021();
+Adafruit_SGP30 gasSensor;
+Adafruit_VL6180X lidar = Adafruit_VL6180X();
 
 // ****** PINS
 const int forceSensorPin = 20;
@@ -16,11 +28,14 @@ float evalEverySample = 1.0; // number of times to poll the vStates funtion
 
 // ****** Time & State Flow
 uint32_t loopCount = 0;
+uint32_t sensorPoll = 0;
 uint32_t timeOffs;
 uint32_t stateTimeOffs;
 uint32_t trialTime;
 uint32_t stateTime;
-uint32_t trigTime = 10; 
+uint32_t trigTime = 10;
+uint32_t weightOffset = 0;
+float weightScale = 0;
 
 
 
@@ -38,14 +53,11 @@ int knownValues[] = {0, 500, 4000, 0, 0, 0, 0, 1, 0, 0, 0};
 int knownCount = 11;
 
 // ************ data
-bool scopeState =1;
+bool scopeState = 1;
 
 int headerStates[] = {0, 0, 0, 0, 0, 0, 0};
 int stateCount = 7;
-int lastState=0;
-
-
-
+int lastState = 0;
 
 
 bool trigStuff = 0;
@@ -54,11 +66,32 @@ void setup() {
 
   pinMode(syncPin, OUTPUT);
   digitalWrite(syncPin, LOW);
-  pinMode(scopePin,INPUT);
+  pinMode(scopePin, INPUT);
   pinMode(rewardPinA, OUTPUT);
   digitalWrite(rewardPinA, LOW);
-  visSerial.begin(9600);
+
+  dashSerial.begin(115200);
   Serial.begin(115200);
+
+  Serial.println("Adafruit VL6180x test!");
+  if (! lidar.begin()) {
+    Serial.println("Failed to find sensor");
+    while (1);
+  }
+
+  Serial.println("Sensor found!");
+
+  if (! gasSensor.begin()) {
+    Serial.println("Sensor not found :(");
+    while (1);
+  }
+  Serial.print("Found SGP30 serial #");
+  Serial.print(gasSensor.serialnumber[0], HEX);
+  Serial.print(gasSensor.serialnumber[1], HEX);
+  Serial.println(gasSensor.serialnumber[2], HEX);
+
+
+
   delay(10000);
   FlexiTimer2::set(1, evalEverySample / sampsPerSecond, vStates);
   FlexiTimer2::start();
@@ -74,23 +107,30 @@ void vStates() {
 
   // we then look for any changes to variables, or calls for updates
   flagReceive(knownHeaders, knownValues);
-  
+
   // Some hardware actions need to complete before a state-change.
   // So, we have a latch for state change. We write over any change with lastState
   if (blockStateChange == 1) {
-    knownValues[0]=lastState;
+    knownValues[0] = lastState;
   }
- 
+
 
   // **************************
   // State 0: Boot/Init State
   // **************************
-  if (knownValues[0] == 0) { 
+  if (knownValues[0] == 0) {
     if (headerStates[0] == 0) {
       genericHeader(0);
       loopCount = 0;
     }
     genericStateBody();
+    if (sensorPoll >= 100) {
+      pollGasSensor();
+      pollLuxSensor();
+      pollTempSensor();
+      pollWeight(weightOffset,weightScale);
+      sensorPoll = 0;
+    }
   }
 
   // Some things we do for all non-boot states before the state code:
@@ -181,7 +221,7 @@ void vStates() {
         visStimOff();
         blockStateChange = 1;
       }
-      
+
       genericStateBody();
       // trap the state in time-out til timeout time over.
       if (stateTime >= uint32_t(knownValues[2])) {
@@ -195,7 +235,7 @@ void vStates() {
     else if (knownValues[0] == 6) {
       if (headerStates[6] == 0) {
         genericHeader(6);
-//        visStimOff();
+        //        visStimOff();
         rewarding = 0;
         blockStateChange = 0;
       }
@@ -248,7 +288,7 @@ int flagReceive(char varAr[], int valAr[]) {
   const byte numChars = 32;
   char writeChar[numChars];
   int selectedVar = 0;
-  int newData=0;
+  int newData = 0;
 
   while (Serial.available() > 0 && newData == 0) {
     rc = Serial.read();
@@ -317,34 +357,85 @@ void genericStateBody() {
   knownValues[9] = analogRead(motionPin);
   knownValues[8] = analogRead(forceSensorPin);
   scopeState = digitalRead(scopePin);
+  sensorPoll++;
 }
 
 void visStimOff() {
-  visSerial.print('v');
-  visSerial.print(',');
-  visSerial.print(0);
-  visSerial.print(',');
-  visSerial.print(0);
-  visSerial.print(',');
-  visSerial.print(0);
-  visSerial.print(',');
-  visSerial.print(0);
-  visSerial.print(',');
-  visSerial.println(knownValues[7]);
+  dashSerial.print('v');
+  dashSerial.print(',');
+  dashSerial.print(0);
+  dashSerial.print(',');
+  dashSerial.print(0);
+  dashSerial.print(',');
+  dashSerial.print(0);
+  dashSerial.print(',');
+  dashSerial.print(0);
+  dashSerial.print(',');
+  dashSerial.println(knownValues[7]);
 }
 
 void visStimOn() {
-  visSerial.print('v');
-  visSerial.print(',');
-  visSerial.print(knownValues[4]);
-  visSerial.print(',');
-  visSerial.print(knownValues[3]);
-  visSerial.print(',');
-  visSerial.print(knownValues[5]);
-  visSerial.print(',');
-  visSerial.print(knownValues[6]);
-  visSerial.print(',');
-  visSerial.println(knownValues[7]);
+  dashSerial.print('v');
+  dashSerial.print(',');
+  dashSerial.print(knownValues[4]);
+  dashSerial.print(',');
+  dashSerial.print(knownValues[3]);
+  dashSerial.print(',');
+  dashSerial.print(knownValues[5]);
+  dashSerial.print(',');
+  dashSerial.print(knownValues[6]);
+  dashSerial.print(',');
+  dashSerial.println(knownValues[7]);
 }
+
+void pollGasSensor() {
+  gasSensor.IAQmeasure();
+  dashSerial.print('z');
+  dashSerial.print(gasSensor.TVOC);
+  dashSerial.println('>');
+
+  dashSerial.print('y');
+  dashSerial.print(gasSensor.eCO2);
+  dashSerial.println('>');
+}
+
+void pollLuxSensor() {
+  float lux = lidar.readLux(VL6180X_ALS_GAIN_5);
+
+  dashSerial.print('l');
+  dashSerial.print(int(lux));
+  dashSerial.println('>');
+
+  uint8_t range = lidar.readRange();
+  uint8_t status = lidar.readRangeStatus();
+
+
+  if (status == VL6180X_ERROR_NONE) {
+    dashSerial.print('r');
+    dashSerial.print(int(range));
+    dashSerial.println('>');
+  }
+}
+
+void pollWeight(uint32_t wOffset, float wScale) {
+  dashSerial.print('w');
+  dashSerial.print(int((knownValues[8] - wOffset)*wScale));
+  dashSerial.println('>');
+}
+
+void pollTempSensor() {
+  dashSerial.print('h');
+  dashSerial.print(int(tempSensor.readHumidity()));
+  dashSerial.println('>');
+
+  dashSerial.print('t');
+  dashSerial.print(int(tempSensor.readTemperature() * 1.8 + 32));
+  dashSerial.println('>');
+}
+
+
+
+
+
 
 
