@@ -14,6 +14,7 @@ Adafruit_Si7021 tempSensor = Adafruit_Si7021();
 Adafruit_SGP30 gasSensor;
 Adafruit_VL6180X lidar = Adafruit_VL6180X();
 
+bool useSensors = 0;
 // ****** PINS
 const int forceSensorPin = 20;
 const int lickPin = 21;
@@ -72,23 +73,24 @@ void setup() {
 
   dashSerial.begin(115200);
   Serial.begin(115200);
+  if (useSensors == 1) {
+    Serial.println("Adafruit VL6180x test!");
+    if (! lidar.begin()) {
+      Serial.println("Failed to find sensor");
+      while (1);
+    }
 
-  Serial.println("Adafruit VL6180x test!");
-  if (! lidar.begin()) {
-    Serial.println("Failed to find sensor");
-    while (1);
+    Serial.println("Sensor found!");
+
+    if (! gasSensor.begin()) {
+      Serial.println("Sensor not found :(");
+      while (1);
+    }
+    Serial.print("Found SGP30 serial #");
+    Serial.print(gasSensor.serialnumber[0], HEX);
+    Serial.print(gasSensor.serialnumber[1], HEX);
+    Serial.println(gasSensor.serialnumber[2], HEX);
   }
-
-  Serial.println("Sensor found!");
-
-  if (! gasSensor.begin()) {
-    Serial.println("Sensor not found :(");
-    while (1);
-  }
-  Serial.print("Found SGP30 serial #");
-  Serial.print(gasSensor.serialnumber[0], HEX);
-  Serial.print(gasSensor.serialnumber[1], HEX);
-  Serial.println(gasSensor.serialnumber[2], HEX);
 
 
 
@@ -124,12 +126,14 @@ void vStates() {
       loopCount = 0;
     }
     genericStateBody();
+    if (useSensors==1){
     if (sensorPoll >= 100) {
-      pollGasSensor();
-      pollLuxSensor();
-      pollTempSensor();
-      pollWeight(weightOffset,weightScale);
-      sensorPoll = 0;
+        pollGasSensor();
+        pollLuxSensor();
+        pollTempSensor();
+        pollWeight(weightOffset, weightScale);
+        sensorPoll = 0;
+      }
     }
   }
 
@@ -292,6 +296,7 @@ int flagReceive(char varAr[], int valAr[]) {
 
   while (Serial.available() > 0 && newData == 0) {
     rc = Serial.read();
+    Serial.println(rc); // debug
     if (recvInProgress == false) {
       for ( int i = 0; i < knownCount; i++) {
         if (rc == varAr[i]) {

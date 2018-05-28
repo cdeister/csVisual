@@ -977,16 +977,34 @@ def runDetectionTask():
         try:
             gDStamp=datetime.datetime.now().strftime("%m/%d/%Y")
             gTStamp=datetime.datetime.now().strftime("%H:%M:%S")
-            print('debug in sheet')
-            # gHashPath=sesVars['hashPath'] + '/simpHashes/client_secret.json'
-            gSheet=csAIO.openGoogleSheet(gHashPath)
-            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Weight Post',sesVars['curWeight'])
-            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Delivered',sesVars['waterConsumed'])
-            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Place',curMachine)
-            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Date Stamp',gDStamp)
-            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Time Stamp',gTStamp)
         except:
             print('did not log to google sheet')
+        
+        try:
+            print('debug in sheet')
+            gSheet=csAIO.openGoogleSheet(gHashPath)
+        except:
+            print('did not log to google sheet')
+        try:
+            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Weight Post',sesVars['curWeight'])
+        except:
+            print('did not log weight')
+        try:
+            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Delivered',sesVars['waterConsumed'])
+        except:
+            print('did not log water cons.')
+        try:
+            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Place',curMachine)
+        except:
+            print('did not log machine')
+        try:
+            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Date Stamp',gDStamp)
+        except:
+            print('did not log date')
+        try:
+            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Time Stamp',gTStamp)
+        except:
+            print('did not log time')
     
     csVar.updateDictFromGUI(sesVars)
     sesVars_bindings=csVar.dictToPandas(sesVars)
