@@ -1,0 +1,44 @@
+pop in sd card
+connect to comp with usb cable
+192.168.6.2 is the ip
+
+Flash the image to the eMCC
+start with sd image and then
+
+sudo nano /boot/uEnv.txt
+uncomment last line 
+sudo reboot
+
+it will flash the image you should see cylon LEDs at some point
+it will shut down when done.
+take sd card out.
+power up
+
+ssh in
+debian@192.168.6.2
+pwd is temppwd
+
+chage the pwd
+sudo passwd
+
+set up wifi
+sudo connmanctl
+scan wifi
+services
+this will show ssids available
+wifi_000ce7013e86_436c6f756479427261696e_managed_psk etc.
+agent on
+connect wifi_000ce7013e86_436c6f756479427261696e_managed_psk
+enter passcode
+exit
+
+sudo apt-get update
+sudo apt-get upgrade
+
+for good measure
+/opt/scripts/tools
+sudo ./grow_partition.sh
+sudo reboot
+
+sudo apt-get install x11vnc
+sudo  x11vnc -bg -o %HOME/.x11vnc.log.%VNCDISPLAY -auth /var/run/gdm/auth-for-gdm*/database -display :0

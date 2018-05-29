@@ -9,12 +9,13 @@
 #define dashSerial Serial1
 
 
-// ****** Make Sensor Objects
+// ****** Make/Use Sensor Objects
 Adafruit_Si7021 tempSensor = Adafruit_Si7021();
 Adafruit_SGP30 gasSensor;
 Adafruit_VL6180X lidar = Adafruit_VL6180X();
-
 bool useSensors = 0;
+
+
 // ****** PINS
 const int forceSensorPin = 20;
 const int lickPin = 21;

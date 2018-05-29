@@ -677,9 +677,13 @@ def runDetectionTask():
                     lyMin=-0.1
                     lyMax=1.1
                 if loopCnt>plotSamps and np.mod(loopCnt,updateCount)==0:
-                    csPlt.updateTrialFig(np.arange(len(sesData[loopCnt-plotSamps:loopCnt,sesVars['chanPlot']])),\
-                        sesData[loopCnt-plotSamps:loopCnt,sesVars['chanPlot']],sesVars['trialNum'],\
-                        sesVars['totalTrials'],tTeensyState,[lyMin,lyMax])
+                    if sesVars['chanPlot']==0:
+                        csPlt.quickUpdateTrialFig(sesVars['trialNum'],\
+                            sesVars['totalTrials'],tTeensyState)
+                    elif sesVars['chanPlot'] != 0:
+                        csPlt.updateTrialFig(np.arange(len(sesData[loopCnt-plotSamps:loopCnt,sesVars['chanPlot']])),\
+                            sesData[loopCnt-plotSamps:loopCnt,sesVars['chanPlot']],sesVars['trialNum'],\
+                            sesVars['totalTrials'],tTeensyState,[lyMin,lyMax])
 
 
                 # look for licks
@@ -981,31 +985,24 @@ def runDetectionTask():
             print('did not log to google sheet')
         
         try:
-            print('debug in sheet')
+            print('attempting to log to sheet')
             gSheet=csAIO.openGoogleSheet(gHashPath)
+            canLog=1
         except:
-            print('did not log to google sheet')
-        try:
-            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Weight Post',sesVars['curWeight'])
-        except:
-            print('did not log weight')
-        try:
-            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Delivered',sesVars['waterConsumed'])
-        except:
-            print('did not log water cons.')
-        try:
-            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Place',curMachine)
-        except:
-            print('did not log machine')
-        try:
-            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Date Stamp',gDStamp)
-        except:
-            print('did not log date')
-        try:
-            csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Time Stamp',gTStamp)
-        except:
-            print('did not log time')
-    
+            print('failed to open google sheet')
+            canLog=0
+        
+        if canLog==1:
+            try:
+                csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Weight Post',sesVars['curWeight'])
+                csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Delivered',sesVars['waterConsumed'])
+                csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Place',curMachine)
+                csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Date Stamp',gDStamp)
+                csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Time Stamp',gTStamp)
+            except:
+                print('did not log some things')
+
+    print('finished your session')
     csVar.updateDictFromGUI(sesVars)
     sesVars_bindings=csVar.dictToPandas(sesVars)
     sesVars_bindings.to_csv(sesVars['dirPath'] + '/' +'sesVars.csv')
@@ -1135,6 +1132,7 @@ if makeBar==0:
     Radiobutton(taskBar, text="Motion", variable=chanPlotIV, value=6).grid(row=cprw+2,column=0,padx=0,sticky=W)
     Radiobutton(taskBar, text="Scope", variable=chanPlotIV, value=7).grid(row=cprw,column=1,padx=0,sticky=W)
     Radiobutton(taskBar, text="Thr Licks", variable=chanPlotIV, value=9).grid(row=cprw+1,column=1,padx=0,sticky=W)
+    Radiobutton(taskBar, text="Nothing", variable=chanPlotIV, value=0).grid(row=cprw+2,column=1,padx=0,sticky=W)
 
 
     # MQTT Stuff
