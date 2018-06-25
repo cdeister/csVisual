@@ -1067,7 +1067,7 @@ if makeBar==0:
     baudEntry_label.grid(row=beRW, column=0,sticky=W)
     baudSelected=IntVar(taskBar)
     baudSelected.set(115200)
-    baudPick = OptionMenu(taskBar,baudSelected,115200,19200,9600)
+    baudPick = OptionMenu(taskBar,baudSelected,115200,19200,9600,500000)
     baudPick.grid(row=beRW, column=1,sticky=W)
     baudPick.config(width=8)
 

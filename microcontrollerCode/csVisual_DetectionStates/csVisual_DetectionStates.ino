@@ -1,19 +1,27 @@
+// csStateBehavior v0.9 -- 32 bit version (teensy)
+// this program can run on any teensy board, or avr based board.
+// most avr boards are 8 bit, so you may want to change the uint32s to be uint
+
+
+
 #include <FlexiTimer2.h>
 #include <Wire.h>
 
+// *********** sensors
+// 1) > Range & Lux Sensor (lidar based)
 #include "Adafruit_VL6180X.h"
-#include "Adafruit_Si7021.h"
-#include "Adafruit_SGP30.h"
+Adafruit_VL6180X lidar = Adafruit_VL6180X();
 
 
+// *********** UART Serial Outs
 #define dashSerial Serial1
 
 
-// ****** Make/Use Sensor Objects
-Adafruit_Si7021 tempSensor = Adafruit_Si7021();
-Adafruit_SGP30 gasSensor;
-Adafruit_VL6180X lidar = Adafruit_VL6180X();
-bool useSensors = 0;
+
+
+
+uint32_t weightOffset = 0;
+float weightScale = 0;
 
 
 // ****** PINS
@@ -23,6 +31,9 @@ const int scopePin = 24;
 const int motionPin = 23;
 const int rewardPinA = 35;
 const int syncPin = 25;
+
+// **** output pins
+int dacChans[] = {A21, A22};
 
 // ****** Interupt Timing
 int sampsPerSecond = 1000;
@@ -36,10 +47,6 @@ uint32_t stateTimeOffs;
 uint32_t trialTime;
 uint32_t stateTime;
 uint32_t trigTime = 10;
-uint32_t weightOffset = 0;
-float weightScale = 0;
-
-
 
 int rewardDelivTypeA = 0; // 0 is solenoid; 1 is syringe pump
 int rewardDelivTypeB = 0;
@@ -65,6 +72,13 @@ int lastState = 0;
 bool trigStuff = 0;
 
 void setup() {
+  Serial.println("Adafruit VL6180x test!");
+  if (! lidar.begin()) {
+    Serial.println("Failed to find sensor");
+    while (1);
+  }
+  Serial.println("Sensor found!");
+
 
   pinMode(syncPin, OUTPUT);
   digitalWrite(syncPin, LOW);
@@ -72,35 +86,15 @@ void setup() {
   pinMode(rewardPinA, OUTPUT);
   digitalWrite(rewardPinA, LOW);
 
-  dashSerial.begin(115200);
-  Serial.begin(115200);
-  if (useSensors == 1) {
-    Serial.println("Adafruit VL6180x test!");
-    if (! lidar.begin()) {
-      Serial.println("Failed to find sensor");
-      while (1);
-    }
-
-    Serial.println("Sensor found!");
-
-    if (! gasSensor.begin()) {
-      Serial.println("Sensor not found :(");
-      while (1);
-    }
-    Serial.print("Found SGP30 serial #");
-    Serial.print(gasSensor.serialnumber[0], HEX);
-    Serial.print(gasSensor.serialnumber[1], HEX);
-    Serial.println(gasSensor.serialnumber[2], HEX);
-  }
-
-
-
+  dashSerial.begin(19200);
+  Serial.begin(9600);
   delay(10000);
   FlexiTimer2::set(1, evalEverySample / sampsPerSecond, vStates);
   FlexiTimer2::start();
 }
 
 void loop() {
+  // This is interupt based so nothing here.
 }
 
 void vStates() {
@@ -122,24 +116,23 @@ void vStates() {
   // State 0: Boot/Init State
   // **************************
   if (knownValues[0] == 0) {
+
+    // run a header for state 0
     if (headerStates[0] == 0) {
       genericHeader(0);
       loopCount = 0;
     }
+
+    // run the generic state
     genericStateBody();
-    if (useSensors==1){
-    if (sensorPoll >= 100) {
-        pollGasSensor();
-        pollLuxSensor();
-        pollTempSensor();
-        pollWeight(weightOffset, weightScale);
-        sensorPoll = 0;
-      }
-    }
+
   }
 
+
+  // ******* ******************************
   // Some things we do for all non-boot states before the state code:
   if (knownValues[0] != 0) {
+
 
     // Get a time offset from when we arrived from 0.
     // This should be the start of the trial, regardless of state we start in.
@@ -362,6 +355,8 @@ void genericStateBody() {
   knownValues[10] = analogRead(lickPin);
   knownValues[9] = analogRead(motionPin);
   knownValues[8] = analogRead(forceSensorPin);
+  // lidar.readLux(VL6180X_ALS_GAIN_5);
+  // analogRead(forceSensorPin);
   scopeState = digitalRead(scopePin);
   sensorPoll++;
 }
@@ -394,52 +389,11 @@ void visStimOn() {
   dashSerial.println(knownValues[7]);
 }
 
-void pollGasSensor() {
-  gasSensor.IAQmeasure();
-  dashSerial.print('z');
-  dashSerial.print(gasSensor.TVOC);
-  dashSerial.println('>');
 
-  dashSerial.print('y');
-  dashSerial.print(gasSensor.eCO2);
-  dashSerial.println('>');
+
+void pulseTrain(int chan) {
+
 }
-
-void pollLuxSensor() {
-  float lux = lidar.readLux(VL6180X_ALS_GAIN_5);
-
-  dashSerial.print('l');
-  dashSerial.print(int(lux));
-  dashSerial.println('>');
-
-  uint8_t range = lidar.readRange();
-  uint8_t status = lidar.readRangeStatus();
-
-
-  if (status == VL6180X_ERROR_NONE) {
-    dashSerial.print('r');
-    dashSerial.print(int(range));
-    dashSerial.println('>');
-  }
-}
-
-void pollWeight(uint32_t wOffset, float wScale) {
-  dashSerial.print('w');
-  dashSerial.print(int((knownValues[8] - wOffset)*wScale));
-  dashSerial.println('>');
-}
-
-void pollTempSensor() {
-  dashSerial.print('h');
-  dashSerial.print(int(tempSensor.readHumidity()));
-  dashSerial.println('>');
-
-  dashSerial.print('t');
-  dashSerial.print(int(tempSensor.readTemperature() * 1.8 + 32));
-  dashSerial.println('>');
-}
-
-
 
 
 

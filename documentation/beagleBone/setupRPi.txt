@@ -1,0 +1,71 @@
+Raspberry Pi setup
+
+Etcher
+
+
+Create ssh
+Create wpa_supplicant.conf containing:
+
+country=US
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+
+network={
+    ssid=“Your_SSID"
+    scan_ssid=1
+    psk=“your_wpaPassword"
+    key_mgmt=WPA-PSK
+}
+
+
+
+sudo apt-get update
+sudo apt-get install python-h5py
+sudo apt-get install python3-h5py
+
+http://geoffboeing.com/2016/03/scientific-python-raspberry-pi/
+
+sudo apt-get install python-numpy python-matplotlib python-mpltoolkits.basemap python-scipy python-sklearn python-statsmodels python-pandas
+sudo apt-get install python3-numpy python3-matplotlib python3-mpltoolkits.basemap python3-scipy python3-sklearn python3-pandas
+
+sudo apt-get install python3-requests python3-pil python3-scrapy python3-geopy python3-shapely python3-pyproj
+sudo pip install jupyter geopandas osmnx
+sudo pip3 install pygsheets
+sudo pip3 install adafruit-io
+sudo pip3 install --upgrade pyasn1-modules
+
+download the latest arm linux arduino ide, avoid apt-get
+https://www.arduino.cc/download_handler.php?f=/arduino-1.8.5-linuxarm.tar.xz
+https://forum.pjrc.com/threads/48825-Installing-Teensyduino-on-Raspberry-Pi-3
+
+sudo ./install.sh
+open the ide from the raspberry menu/programming at least once so it can create its librries
+
+tar xf 
+or gui
+
+https://www.pjrc.com/teensy/td_download.html
+get the installer and the udev rules!
+you have to take the udev thing seriously and run
+sudo cp 49-teensy.rules /etc/udev/rules.d/
+
+have to make Teensyduinoinstall executable either GUI or
+chmod +x TeensyduinoInstall*
+
+add adafruit libraries
+https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
+add sensor libraries
+go to tool/libraries/manage libraries
+and search for 
+VL6180X
+Si7021
+SGP30
+
+
+from the directory
+
+
+UART ...
+https://www.raspberrypi.org/forums/viewtopic.php?t=173461
+Serial0
+https://electrosome.com/uart-raspberry-pi-python/

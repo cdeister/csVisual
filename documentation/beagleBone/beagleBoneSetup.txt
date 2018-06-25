@@ -19,7 +19,7 @@ debian@192.168.6.2
 pwd is temppwd
 
 chage the pwd
-sudo passwd
+passwd (not sudo)
 
 set up wifi
 sudo connmanctl
@@ -42,3 +42,22 @@ sudo reboot
 
 sudo apt-get install x11vnc
 sudo  x11vnc -bg -o %HOME/.x11vnc.log.%VNCDISPLAY -auth /var/run/gdm/auth-for-gdm*/database -display :0
+
+sudo apt-get install build-essential python-dev python-distlib python-setuptools python-pip python-wheel
+
+sudo apt-get install python3-dev python3-distlib python3-setuptools python3-pip python3-wheel
+
+sudo apt-get install python-h5py
+sudo apt-get install python3-h5py
+
+pandas
+sudo apt-get install xsel xclip libxml2-dev libxslt-dev python-lxml python-numexpr python-dateutil python-six python-tz python-bs4 python-html5lib python-openpyxl python-tables python-xlrd python-xlwt cython python-sqlalchemy python-xlsxwriter python-jinja2 python-boto python-gflags python-googleapi python-httplib2 python-zmq
+
+
+sudo apt-get install python3-lxml python3-numexpr python3-dateutil python3-six python3-tz python3-bs4 python3-html5lib python3-openpyxl python3-tables python3-xlrd python3-sqlalchemy python3-xlsxwriter python3-jinja2 python3-boto python3-gflags python3-googleapi python3-httplib2 python3-zmq
+
+
+sudo apt-get install python-numpy python-matplotlib python-scipy
+sudo apt-get install python3-numpy python3-matplotlib python3-scipy
+
+

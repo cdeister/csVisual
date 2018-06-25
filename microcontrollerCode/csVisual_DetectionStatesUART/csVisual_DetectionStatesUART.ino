@@ -71,8 +71,8 @@ void setup() {
   pinMode(rewardPinA, OUTPUT);
   digitalWrite(rewardPinA, LOW);
 
-  dashSerial.begin(115200);
-  Serial.begin(115200);
+  dashSerial.begin(500000);
+  Serial.begin(19200);
   if (useSensors == 1) {
     Serial.println("Adafruit VL6180x test!");
     if (! lidar.begin()) {
