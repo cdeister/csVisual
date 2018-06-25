@@ -33,7 +33,7 @@ const int rewardPinA = 35;
 const int syncPin = 25;
 
 // **** output pins
-int dacChans[] = {A21, A22};
+int dacChans[] = {A2, A3};
 
 // ****** Interupt Timing
 int sampsPerSecond = 1000;
@@ -72,12 +72,6 @@ int lastState = 0;
 bool trigStuff = 0;
 
 void setup() {
-  Serial.println("Adafruit VL6180x test!");
-  if (! lidar.begin()) {
-    Serial.println("Failed to find sensor");
-    while (1);
-  }
-  Serial.println("Sensor found!");
 
 
   pinMode(syncPin, OUTPUT);
@@ -86,7 +80,7 @@ void setup() {
   pinMode(rewardPinA, OUTPUT);
   digitalWrite(rewardPinA, LOW);
 
-  dashSerial.begin(19200);
+  dashSerial.begin(9600);
   Serial.begin(9600);
   delay(10000);
   FlexiTimer2::set(1, evalEverySample / sampsPerSecond, vStates);
