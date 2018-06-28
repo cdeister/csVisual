@@ -81,7 +81,7 @@ void setup() {
   digitalWrite(rewardPinA, LOW);
 
   dashSerial.begin(9600);
-  Serial.begin(9600);
+  Serial.begin(19200);
   delay(10000);
   FlexiTimer2::set(1, evalEverySample / sampsPerSecond, vStates);
   FlexiTimer2::start();

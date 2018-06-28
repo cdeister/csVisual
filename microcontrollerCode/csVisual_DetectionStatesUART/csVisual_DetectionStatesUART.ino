@@ -71,7 +71,7 @@ void setup() {
   pinMode(rewardPinA, OUTPUT);
   digitalWrite(rewardPinA, LOW);
 
-  dashSerial.begin(500000);
+  dashSerial.begin(19200);
   Serial.begin(19200);
   if (useSensors == 1) {
     Serial.println("Adafruit VL6180x test!");

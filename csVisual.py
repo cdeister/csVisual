@@ -1,6 +1,10 @@
-# csVisual v0.8
+# csVisual v0.9
 # 
-# -- fixed bug causing intermitent jitter on the order of 0.2%.
+# - added serial buffering
+# - changed to serial read method to avoid using the readline method
+# - improved MQ/Google Sheet exception handling at the end of the session
+# - buffer size is not configurabe yet
+# 
 #
 # Chris Deister - cdeister@brown.edu
 # Anything that is licenseable is governed by a MIT License found in the github directory. 
@@ -225,15 +229,50 @@ class csSerial(object):
         self.a=1
 
     def connectComObj(self,comPath,baudRate):
-        self.comObj = serial.Serial(comPath,baudRate)
+        self.comObj = serial.Serial(comPath,baudRate,timeout=0)
+        self.comObj.close()
+        self.comObj.open()
         return self.comObj
 
+    def readSerialBuffer(self,comObj,curBuf,bufMaxSize):
+        
+        comObj.timeOut=0
+        curBuf=curBuf+comObj.read(1)
+        curBuf=curBuf+comObj.read(min(bufMaxSize-1, comObj.in_waiting))
+        i = curBuf.find(b"\n")
+        r = curBuf[:i+1]
+        curBuf = curBuf[i+1:]
+        
+        echoDecode=bytes()
+        tDataDecode=bytes()
+        eR=[]
+        sR=[]
+
+        eB=r.find(b"echo")
+        eE=r.find(b"~")
+        tDB=r.find(b"tData")
+        tDE=r.find(b"\r")
+
+        if eB>=0 and eE>=1:
+            echoDecode=r[eB:eE+1]
+            eR=echoDecode.strip().decode()
+            eR=eR.split(',')
+        if tDB>=0 and tDE>=1:
+            tDataDecode=r[tDB:tDE]
+            sR=tDataDecode.strip().decode()
+            sR=sR.split(',')
+
+        self.curBuf = curBuf
+        self.echoLine = eR
+        self.dataLine = sR
+        return self.curBuf,self.echoLine,self.dataLine
 
     def readSerialData(self,comObj,headerString,varCount):
         sR=[]
         newData=0
+        bytesAvail=comObj.inWaiting()
 
-        if comObj.inWaiting()>0:
+        if bytesAvail>0:
             sR=comObj.readline().strip().decode()
             sR=sR.split(',')
             if len(sR)==varCount and sR[0]==headerString:
@@ -241,7 +280,8 @@ class csSerial(object):
 
         self.sR=sR
         self.newData=newData
-        return self.sR,self.newData
+        self.bytesAvail = bytesAvail
+        return self.sR,self.newData,self.bytesAvail
 
     def flushBuffer(self,comObj):
         while comObj.inWaiting()>0:
@@ -251,7 +291,7 @@ class csSerial(object):
     def checkVariable(self,comObj,headChar,fltDelay):
         comObj.write('{}<'.format(headChar).encode('utf-8'))
         time.sleep(fltDelay)
-        [tString,self.dNew]=self.readSerialData(comObj,'echo',4)
+        [tString,self.dNew,self.bAvail]=self.readSerialData(comObj,'echo',4)
         if self.dNew:
             if tString[1]==headChar:
                 self.returnVar=int(tString[2])
@@ -621,7 +661,7 @@ def runDetectionTask():
     sList=[0,1,2,3,4,5]
     trialSamps=[0,0]
     
-    
+    serialBuf=bytearray()
     sampLog=[]
     
     tc['state'] = 'disabled'
@@ -655,8 +695,9 @@ def runDetectionTask():
 
             
             # b) Look for teensy data.
-            [tString,dNew]=csSer.readSerialData(teensy,'tData',9)
-            if dNew:
+            [serialBuf,eR,tString]=csSer.readSerialBuffer(teensy,serialBuf,1024)
+            # [tString,dNew,bAvail]=csSer.readSerialData(teensy,'tData',9)
+            if len(tString)==9:
                 tStateTime=int(tString[3])
                 tTeensyState=int(tString[4])
         
@@ -664,6 +705,7 @@ def runDetectionTask():
                 tFrameCount=0  # Todo: frame counter in.
                 for x in range(0,sesVars['dStreams']-2):
                     sesData[loopCnt,x]=int(tString[x+1])
+                # sesData[loopCnt,5]=bAvail # debug
                 sesData[loopCnt,8]=pyState # The state python wants to be.
                 sesData[loopCnt,9]=0 # Thresholded licks
                 loopCnt=loopCnt+1
@@ -903,20 +945,20 @@ def runDetectionTask():
             if sesVars['logMQTT']==1:
                 try:
                     sesVars['curWeight']=(np.mean(sesData[-200:-1,4])-sesVars['loadBaseline'])*sesVars['loadScale']
-                except:
-                    sesVars['curWeight']=21
-                csAIO.rigOffLog(aio,sesVars['subjID'],sesVars['curWeight'],curMachine,sesVars['mqttUpDel'])
+                    csAIO.rigOffLog(aio,sesVars['subjID'],sesVars['curWeight'],curMachine,sesVars['mqttUpDel'])
 
-                # update animal's water consumed feed.
-                sesVars['waterConsumed']=int(sesVars['waterConsumed']*10000)/10000
-                aio.send('{}_waterConsumed'.format(sesVars['subjID']),sesVars['waterConsumed'])
-                topAmount=sesVars['consumpTarg']-sesVars['waterConsumed']
-                topAmount=int(topAmount*10000)/10000
-                if topAmount<0:
-                    topAmount=0
-             
-                print('give {:0.3f} ml later by 12 hrs from now'.format(topAmount))
-                aio.send('{}_topVol'.format(sesVars['subjID']),topAmount)
+                    # update animal's water consumed feed.
+                    sesVars['waterConsumed']=int(sesVars['waterConsumed']*10000)/10000
+                    aio.send('{}_waterConsumed'.format(sesVars['subjID']),sesVars['waterConsumed'])
+                    topAmount=sesVars['consumpTarg']-sesVars['waterConsumed']
+                    topAmount=int(topAmount*10000)/10000
+                    if topAmount<0:
+                        topAmount=0
+                 
+                    print('give {:0.3f} ml later by 12 hrs from now'.format(topAmount))
+                    aio.send('{}_topVol'.format(sesVars['subjID']),topAmount)
+                except:
+                    a=1
             
             csVar.updateDictFromGUI(sesVars)
             sesVars_bindings=csVar.dictToPandas(sesVars)
@@ -957,50 +999,48 @@ def runDetectionTask():
     # Update MQTT Feeds
     if sesVars['logMQTT']==1:
         try:
-            sesVars['curWeight']=(np.mean(sesData[loopCnt-plotSamps:loopCnt,4])-sesVars['loadBaseline'])*\
-            sesVars['loadScale'];
-        except:
-            sesVars['curWeight']=21
+            sesVars['curWeight']=(np.mean(sesData[loopCnt-plotSamps:loopCnt,4])-sesVars['loadBaseline'])*sesVars['loadScale']
+            sesVars['waterConsumed']=int(sesVars['waterConsumed']*10000)/10000
+            topAmount=sesVars['consumpTarg']-sesVars['waterConsumed']
+            topAmount=int(topAmount*10000)/10000
+            if topAmount<0:
+                topAmount=0
+            print('give {:0.3f} ml later by 12 hrs from now'.format(topAmount))
 
-        sesVars['waterConsumed']=int(sesVars['waterConsumed']*10000)/10000
-        topAmount=sesVars['consumpTarg']-sesVars['waterConsumed']
-        topAmount=int(topAmount*10000)/10000
-        if topAmount<0:
-            topAmount=0
-        print('give {:0.3f} ml later by 12 hrs from now'.format(topAmount))
-
-        try:
-            csAIO.rigOffLog(aio,sesVars['subjID'],sesVars['curWeight'],curMachine,sesVars['mqttUpDel'])
-            aio.send('{}_waterConsumed'.format(sesVars['subjID']),sesVars['waterConsumed'])
-            aio.send('{}_topVol'.format(sesVars['subjID']),topAmount)
-        except:
-            print('failed to log mqtt info')
-       
-        # update animal's water consumed feed.
-
-        try:
-            gDStamp=datetime.datetime.now().strftime("%m/%d/%Y")
-            gTStamp=datetime.datetime.now().strftime("%H:%M:%S")
-        except:
-            print('did not log to google sheet')
-        
-        try:
-            print('attempting to log to sheet')
-            gSheet=csAIO.openGoogleSheet(gHashPath)
-            canLog=1
-        except:
-            print('failed to open google sheet')
-            canLog=0
-        
-        if canLog==1:
             try:
-                csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Weight Post',sesVars['curWeight'])
-                csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Delivered',sesVars['waterConsumed'])
-                csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Place',curMachine)
-                csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Date Stamp',gDStamp)
-                csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Time Stamp',gTStamp)
+                csAIO.rigOffLog(aio,sesVars['subjID'],sesVars['curWeight'],curMachine,sesVars['mqttUpDel'])
+                aio.send('{}_waterConsumed'.format(sesVars['subjID']),sesVars['waterConsumed'])
+                aio.send('{}_topVol'.format(sesVars['subjID']),topAmount)
             except:
-                print('did not log some things')
+                print('failed to log mqtt info')
+       
+            # update animal's water consumed feed.
+
+            try:
+                gDStamp=datetime.datetime.now().strftime("%m/%d/%Y")
+                gTStamp=datetime.datetime.now().strftime("%H:%M:%S")
+            except:
+                print('did not log to google sheet')
+        
+            try:
+                print('attempting to log to sheet')
+                gSheet=csAIO.openGoogleSheet(gHashPath)
+                canLog=1
+            except:
+                print('failed to open google sheet')
+                canLog=0
+        
+            if canLog==1:
+                try:
+                    csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Weight Post',sesVars['curWeight'])
+                    csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Delivered',sesVars['waterConsumed'])
+                    csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Place',curMachine)
+                    csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Date Stamp',gDStamp)
+                    csAIO.updateGoogleSheet(gSheet,sesVars['subjID'],'Time Stamp',gTStamp)
+                except:
+                    print('did not log some things')
+        except:
+            print("failed to log")
 
     print('finished your session')
     csVar.updateDictFromGUI(sesVars)
